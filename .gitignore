@@ -1,0 +1,25 @@
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.env/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+
+
+# Local dataset
+dataset_local/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Enviroment variable files.env
+*.env
+
