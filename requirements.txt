@@ -6,4 +6,6 @@ requests==2.32.4
 urllib3==2.5.0
 kaggle==1.5.16
 google-cloud-storage
+google-cloud-bigquery
+db-dtypes
 pandas

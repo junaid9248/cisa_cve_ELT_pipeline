@@ -694,6 +694,7 @@ class cveExtractor():
                 self.google_client.csv_to_bucket(year_processed_files, year=year_data['year'])
 
                 #Path 3: Enter data into Bigquery
+                self.google_client.csv_bigquery(isLocal = self.islocal,processed_files = year_processed_files ,year=year_data['year'])
             
         return files_written_to_csv
     
