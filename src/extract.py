@@ -684,6 +684,7 @@ class cveExtractor():
         #logging.info(f'This is the year_processed_files list: {year_processed_files}')
 
         if year_processed_files:
+            logging.info(f'These are the processed files for {year_data['year']} : {year_processed_files}')
             #logging.info(f'This is the year_processed_files list: {year_processed_files}')
 
             # Path 1: Create a csv file in the local dataset for internal storage
@@ -694,7 +695,7 @@ class cveExtractor():
                 self.google_client.csv_to_bucket(year_processed_files, year=year_data['year'])
 
                 #Path 3: Enter data into Bigquery
-                self.google_client.csv_bigquery(isLocal = self.islocal,processed_files = year_processed_files ,year=year_data['year'])
+                self.google_client.csv_bigquery(isLocal = self.islocal,files  = year_processed_files ,year=year_data['year'])
             
         return files_written_to_csv
     
