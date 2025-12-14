@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from src.config import GH_TOKEN
 
-from src.gc import googleClient
+from src.gc import GoogleClient
 
 from src.parser import extract_cvedata
 
@@ -32,7 +32,7 @@ class cveExtractor():
 
         #Instantiating a gc class if remote execution
         if not self.islocal:
-            self.google_client = googleClient()
+            self.google_client = GoogleClient()
             logging.info(f'Instantiated a google client for remote upload')
         else:
             self.google_client = None
@@ -285,7 +285,7 @@ class cveExtractor():
                 #self.google_client.csv_to_bucket(year_processed_files, year=year_data['year'])
 
                 #Path 3: Enter data into Bigquery
-                #self.google_client.csv_bigquery(isLocal = self.islocal,files  = year_processed_files ,year=year_data['year'])
+                #self.google_client.csv_bigquery(files  = year_processed_files ,year=year_data['year'])
             
         return files_written_to_csv
     
@@ -330,7 +330,7 @@ class cveExtractor():
                 if file['name'] == file_name:
                     download_url = file['download_url']
         
-        print(f"Downloading CVE record from: {download_url}")
+        logging.info(f"Downloading CVE record from: {download_url}")
 
         try:
             response = self.session.get(download_url)

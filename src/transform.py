@@ -2,20 +2,32 @@ import logging
 import json 
 import pandas as pd
 from google.cloud import storage
+from typing import Dict, List, Optional, Any
 
-from src.gc import googleClient
-from src.parser import extract_cvedata
+from .gc import GoogleClient
+from .parser import extract_cvedata
+from .extract import get_years
 
 logging.basicConfig(level=logging.INFO)
 
-def create_combined_table():
-    # This function will create the combined dataset table 
-    pass
+# Declaring google client instance globally so multiple functions can use it
+gc = GoogleClient()
+
+# Declaring an empty list globally so that it can be used to create the combined dataset
+combined_proccessed_records = []
+
+def create_combined_table(combined_processed_records: Dict = {}):
+    try:
+        logging.info(f'Creating combined table...')
+        gc.csv_bigquery(files=combined_processed_records)
+    except Exception as e:
+        logging.info(f'Failed to create a combined table: {e}')
+        
 
 def transform_tocsv_load_to_gcs_bq(year: str = ''):
     logging.info(f'Transforming raw json to csv for year: {year}')
 
-    gc = googleClient()
+    
     storage_client = gc.storage_client
 
     bucket_id = gc.bucket_name
@@ -24,12 +36,17 @@ def transform_tocsv_load_to_gcs_bq(year: str = ''):
     bucket = storage_client.bucket(bucket_id)
 
     # fetching raw jsons using blob names
-    blob_prefix = f'{bucket_id}/{year}'
+    blob_prefix = f'{year}/'
     blobs = bucket.list_blobs(prefix=blob_prefix)
+
+    #logging.info(f'These are the blobs retrived from {bucket_id}: {list(blobs)}')
 
     processed_records = []
 
     for blob in blobs:
+        if not blob.name.endswith('.json'):
+            continue
+
         # we will first download the raw text
         try:
             content = blob.download_as_text()
@@ -45,23 +62,26 @@ def transform_tocsv_load_to_gcs_bq(year: str = ''):
         except Exception as e:
             logging.error(f'Failed to download blob contents and create a record!: {e}') 
 
-    # After processing each blob we have the processed_records
-    logging.info(f'These are the processed records: {processed_records}')
+    #logging.info(f'These are the processed records: {processed_records}')
 
-    # Uploading processed records for the year to the gcs bucket as csv but to a new folder 
-    #logging.info(f'Uploading the records for {year} to GCS ')
-    #gc.csv_to_bucket(processed_records, year= year)
+    # add to combined proccessed records
+    combined_proccessed_records.extend(processed_records)
 
-    # TO DO: Use the bigquery function to parse the combined csv as a new table
+    # Use the custom bigquery function to parse the year object as a new table
+    gc.csv_bigquery(files = processed_records, year=year)
     
 
-
-
 if __name__ == '__main__':
-    years = ['1999']
+    #years = ['1999', '2000']
+
+    years = get_years()
 
     for year in years:
         transform_tocsv_load_to_gcs_bq(year)
+
+    create_combined_table(combined_processed_records=combined_proccessed_records)
+
+    
 
 
             

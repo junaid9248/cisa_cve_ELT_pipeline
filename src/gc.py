@@ -10,7 +10,7 @@ from src.config import GCLOUD_API_KEY, GCLOUD_BUCKETNAME, GCLOUD_APP_CREDENTIALS
 
 logging.basicConfig(level = logging.INFO)
 
-class googleClient():
+class GoogleClient():
 
     def __init__(self, bucket_name: str = GCLOUD_BUCKETNAME):
 
@@ -58,98 +58,94 @@ class googleClient():
 
 
             
-    def csv_bigquery(self, isLocal, files :List= [], year:str = '1999'):
+    def csv_bigquery(self, files :List= [], year:str = 'combined'):
 
-        # Check if it is automated mode 
-        if not isLocal:
-            
-            dataset_id = 'cisa-cve-data-pipeline.cve_all'
+        dataset_id = 'cisa-cve-data-pipeline.cve_all'
+        dataset_exists = False
+
+        try:               
+            #Create a bigquery dataset object
+            dataset = bigquery.Dataset(dataset_id)
+            dataset.location = 'US'
+
+            dataset = self.bigquery_client.create_dataset(dataset=dataset, exists_ok=True ,timeout=30)
+            logging.info(f'Successfully created: {dataset.dataset_id} in {self.bigquery_client.project}')
+            dataset_exists = True
+        except Exception as e:
+            logging.warning(f'Error creating dataset: {e}')
             dataset_exists = False
+    
 
-            try:               
-                #Create a bigquery dataset object
-                dataset = bigquery.Dataset(dataset_id)
-                dataset.location = 'US'
-
-                dataset = self.bigquery_client.create_dataset(dataset=dataset, exists_ok=True ,timeout=30)
-                logging.info(f'Successfully created: {dataset.dataset_id} in {self.bigquery_client.project}')
-                dataset_exists = True
-            except Exception as e:
-                logging.warning(f'Error creating dataset: {e}')
-                dataset_exists = False
         
+        # If dataset exists proceeding with table creation or update
+        if dataset_exists:
+            table_id = f'cve_{year}_table'
+            table_ref = f'{dataset_id}.{table_id}'
 
+            year_table_schema = [
+                        bigquery.SchemaField('cve_id', 'STRING', mode='REQUIRED', description='Unique CVE identifier'),
+                        bigquery.SchemaField("published_date", "STRING", description="Date first published"),
+                        bigquery.SchemaField("updated_date", "STRING", description="Latest date updated"),
+                        bigquery.SchemaField('cisa_kev','STRING', description='If appeared in CISA KEV catalog'),
+                        bigquery.SchemaField('cisa_kev_date', 'STRING', description='Date appeared in CISA KEV catalog'),
+
+                        bigquery.SchemaField('cvss_version', 'STRING', description='CVSS version recorded'),
+
+                        bigquery.SchemaField('base_score', 'STRING', description='Base CVSS score for CVE entry'),
+
+                        bigquery.SchemaField('base_severity', 'STRING', description='Severity classiication for CVE entry'),
+
+                        bigquery.SchemaField('attack_vector', 'STRING', description='Attack vector for attacks'),
+
+                        bigquery.SchemaField('attack_complexity', 'STRING', description='Complexity of attack'),
+                        bigquery.SchemaField('privileges_required', 'STRING', description='Level of privillege required'),
+                        bigquery.SchemaField('user_interaction', 'STRING', description='Level of user interaction needed'),
+                        bigquery.SchemaField('scope', 'STRING'),
+
+                        bigquery.SchemaField('confidentiality_impact', 'STRING', description='If confidentiality of system affected'),
+                        bigquery.SchemaField('integrity_impact', 'STRING', description='If integrity of system affected'),
+                        bigquery.SchemaField('availability_impact', 'STRING', description='If availability of system affected'),
+
+                        bigquery.SchemaField('ssvc_timestamp', 'STRING', description='Date SSVC score was added'),
+                        bigquery.SchemaField('ssvc_exploitation', 'STRING', description='Whether exploitable'),
+                        bigquery.SchemaField('ssvc_automatable', 'STRING', description='Whether automatable'),
+                        bigquery.SchemaField('ssvc_technical_impact', 'STRING', description='SSVC impact level'),
+                        bigquery.SchemaField('ssvc_decision', 'STRING', description='SSVC decision for metrics'),
+
+                        bigquery.SchemaField('impacted_vendor', 'STRING', description='List of vendors impacted'),
+                        bigquery.SchemaField('impacted_products', 'STRING', mode='REPEATED', description='List of products impacted'),
+                        bigquery.SchemaField('vulnerable_versions', 'STRING', mode='REPEATED', description='List of product versions impacted'),
+
+                        bigquery.SchemaField('cwe_number', 'STRING', description='CWE description number'),
+                        bigquery.SchemaField('cwe_description', 'STRING', description='Description of CWE')]
             
-            # If dataset exists proceeding with table creation or update
-            if dataset_exists:
-                #Check for the desired year table to see if it is in this dataset
-                table_id = f'cve_{year}_table'
-                table_ref = f'{dataset_id}.{table_id}'
+            # Defining the new table object
+            new_table = bigquery.Table(table_ref, schema= year_table_schema)
 
-                year_table_schema = [
-                            bigquery.SchemaField('cve_id', 'STRING', mode='REQUIRED', description='Unique CVE identifier'),
-                            bigquery.SchemaField("published_date", "STRING", description="Date first published"),
-                            bigquery.SchemaField("updated_date", "STRING", description="Latest date updated"),
-                            bigquery.SchemaField('cisa_kev','STRING', description='If appeared in CISA KEV catalog'),
-                            bigquery.SchemaField('cisa_kev_date', 'STRING', description='Date appeared in CISA KEV catalog'),
+            try: 
+                #Inserting new table into the dataset
+                table = self.bigquery_client.create_table(table= new_table, exists_ok=True)
 
-                            bigquery.SchemaField('cvss_version', 'STRING', description='CVSS version recorded'),
+                updated_table = self.bigquery_client.update_table(table, fields=['schema'])
 
-                            bigquery.SchemaField('base_score', 'STRING', description='Base CVSS score for CVE entry'),
+                logging.info(f'Successfully created table: {updated_table.table_id} in dataset folder {updated_table.dataset_id}')
 
-                            bigquery.SchemaField('base_severity', 'STRING', description='Severity classiication for CVE entry'),
+                rows_to_insert = files                    
+                fill_errors = self.bigquery_client.insert_rows_json(
+                    table = new_table,
+                    json_rows= rows_to_insert
+                )
 
-                            bigquery.SchemaField('attack_vector', 'STRING', description='Attack vector for attacks'),
+                if fill_errors:
+                    logging.ERROR(f'Error while filling rows for table {table_ref}')
 
-                            bigquery.SchemaField('attack_complexity', 'STRING', description='Complexity of attack'),
-                            bigquery.SchemaField('privileges_required', 'STRING', description='Level of privillege required'),
-                            bigquery.SchemaField('user_interaction', 'STRING', description='Level of user interaction needed'),
-                            bigquery.SchemaField('scope', 'STRING'),
+                    # Return obj is a list of errors. Each element has propert
+                    for error in fill_errors:
+                        logging.warning(f'Error inserting at {error['index']}: error:{error['errors']}')
+                else:
+                    logging.info(f'Successfully inserted rows for table: {table_ref}')
 
-                            bigquery.SchemaField('confidentiality_impact', 'STRING', description='If confidentiality of system affected'),
-                            bigquery.SchemaField('integrity_impact', 'STRING', description='If integrity of system affected'),
-                            bigquery.SchemaField('availability_impact', 'STRING', description='If availability of system affected'),
-
-                            bigquery.SchemaField('ssvc_timestamp', 'STRING', description='Date SSVC score was added'),
-                            bigquery.SchemaField('ssvc_exploitation', 'STRING', description='Whether exploitable'),
-                            bigquery.SchemaField('ssvc_automatable', 'STRING', description='Whether automatable'),
-                            bigquery.SchemaField('ssvc_technical_impact', 'STRING', description='SSVC impact level'),
-                            bigquery.SchemaField('ssvc_decision', 'STRING', description='SSVC decision for metrics'),
-
-                            bigquery.SchemaField('impacted_vendor', 'STRING', description='List of vendors impacted'),
-                            bigquery.SchemaField('impacted_products', 'STRING', mode='REPEATED', description='List of products impacted'),
-                            bigquery.SchemaField('vulnerable_versions', 'STRING', mode='REPEATED', description='List of product versions impacted'),
-
-                            bigquery.SchemaField('cwe_number', 'STRING', description='CWE description number'),
-                            bigquery.SchemaField('cwe_description', 'STRING', description='Description of CWE')]
-                
-                # Defining the new table object
-                new_table = bigquery.Table(table_ref, schema= year_table_schema)
-
-                try: 
-                    #Inserting new table into the dataset
-                    table = self.bigquery_client.create_table(table= new_table, exists_ok=True)
-
-                    updated_table = self.bigquery_client.update_table(table, fields=['schema'])
-
-                    logging.info(f'Successfully created table: {updated_table.table_id} in dataset folder {updated_table.dataset_id}')
-
-                    rows_to_insert = files                    
-                    fill_errors = self.bigquery_client.insert_rows_json(
-                        table = new_table,
-                        json_rows= rows_to_insert
-                    )
-
-                    if fill_errors:
-                        logging.ERROR(f'Error while filling rows for table {table_ref}')
-
-                        # Return obj is a list of errors. Each element has propert
-                        for error in fill_errors:
-                            logging.warning(f'Error inserting at {error['index']}: error:{error['errors']}')
-                    else:
-                        logging.info(f'Successfully inserted rows for table: {table_ref}')
-
-                except Exception as e:
-                    logging.warning(f'failed to create table: {e}')
+            except Exception as e:
+                logging.warning(f'failed to create table: {e}')
 
                     
