@@ -8,4 +8,7 @@ kaggle==1.5.16
 google-cloud-storage
 google-cloud-bigquery
 db-dtypes
+docker
 pandas
+apache-airflow
+timedelta

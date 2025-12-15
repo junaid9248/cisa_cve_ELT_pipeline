@@ -67,16 +67,20 @@ def run():
     argparser = argparse.ArgumentParser(description= 'Transform raw CVE json text files to structured BigQuery tables')
 
     # adding years flag arugument to the argument parser
-    argparser.add_argument('--years', action='store_true', help='Pass years thru comma separated input. If not, get years from cve-raws-bucket bucket')
+    #argparser.add_argument('--years', action='store_true', help='Pass years thru comma separated input. If not, get years from cve-raws-bucket bucket')
 
     # Adding years list argument for custom 
-    argparser.add_argument('testyears', type=str, help='Years list passed after years flag, can be custom list for test purposes or entire list of years using get_years() function from extractor')
+    argparser.add_argument('years', 
+                           nargs='?',
+                           type=str,
+                           default=None, 
+                           help='Comma separated years list, can be custom list for test purposes or entire list of years using get_years() function from extractor')
 
     args = argparser.parse_args()
 
-    if args.testyears:
+    if args.years:
         # testing
-        years = args.testyears.split(',')
+        years = args.years.split(',')
     else:
         # Automated
         extractor = cveExtractor()
