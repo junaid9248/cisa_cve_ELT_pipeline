@@ -5,7 +5,7 @@ import os
 import time
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional
 from dotenv import load_dotenv
 
 from src.config import GH_TOKEN
@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 load_dotenv(override=True)
 
 class cveExtractor():
-    def __init__(self, islocal, branch: str = 'develop', token: Optional[str] = None):
+    def __init__(self, islocal: Optional[bool] = True, branch: str = 'develop', token: Optional[str] = None):
 
         self.branch = branch
         self.base_url = "https://api.github.com"
@@ -89,10 +89,12 @@ class cveExtractor():
                 print(f"✓ API Rate limit remaining: {rate_limit_remaining}")
                 if int(rate_limit_remaining) < 60:
                     logging.warning("⚠️  Warning: Low rate limit remaining. Consider using a GitHub token.")
+            
+            return True
 
         else:
             logging.error(f"❌ Failed to get file : {response.status_code}")
-            return None
+            return False
         
     def get_years(self) -> List[str]:
         url = f"{self.base_url}/repos/{self.repo_owner}/{self.repo_name}/contents"
@@ -196,7 +198,6 @@ class cveExtractor():
         logging.info(f"🔍 Starting to process year data for {year_data['year']}...")
 
         # We will use this list to batch uploads and csv entries
-        files_written_to_csv = 0
 
         try:
             year_processed_files = []
@@ -238,7 +239,8 @@ class cveExtractor():
                                     #logging.info(f'This is record: {record}')
                                     subdir_processed_files.append(record)
                                     #logging.info(f'This is subdir right now: {subdir_processed_files}')
-
+                                    
+                                    # BLOB UPLOAD in cloud mode
                                     if not self.islocal:
                                         try:
                                             # Immediately uploading to bucket if not local execution
@@ -276,18 +278,15 @@ class cveExtractor():
         
         if year_processed_files:
             #logging.info(f'This is the year_processed_files list: {year_processed_files}')
-            # Path 1: Create a csv file in the local dataset for internal storage
+            # Local path: Create a csv file in the local dataset for internal storage
             if self.islocal:
                 self.year_to_csv(year_processed_files, year=year_data['year'])
             else:
+                # Since we have separated the transform logic we will trigger it in the dag 
+                # Which will be scheduled to run after this extract script has been run for all the years
                 pass
-                #Path 2: Send to the google client so a csv can be created there
-                #self.google_client.csv_to_bucket(year_processed_files, year=year_data['year'])
-
-                #Path 3: Enter data into Bigquery
-                #self.google_client.csv_bigquery(files  = year_processed_files ,year=year_data['year'])
-            
-        return files_written_to_csv
+     
+        return None
     
     def year_to_csv(self, year_processed_files: List, year):
         try:
@@ -353,25 +352,18 @@ class cveExtractor():
     
 
     # Psuedo main function called from main.py
-    def run(self, years: Optional[List[str]] = []):
+    def run(self, years: List[str] = []):
         
-        self.test_connection()
+        success= self.test_connection()
 
-        if self.islocal == True:
-            #years = self.get_years()
-            years = ['2001']
-        else:
-            #years = self.get_years()
-            years = years
-
-        for year in years:
-            year_data = self.get_cve_files_for_year(year)
-
-            #This is for the decoupled parser....
-            #extract_cvedata_from_yeardata(year_data)
-
-            self.extract_store_cve_data(year_data)
-
+        # If succesful test connection is established
+        if success:
+            for year in years:
+                # Since for both local and cloud mode we still get the years
+                # years will be either all the available years (get_years())
+                # or can be the custom list of years for testing
+                year_data = self.get_cve_files_for_year(year)
+                self.extract_store_cve_data(year_data)
 
 
 

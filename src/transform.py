@@ -1,37 +1,35 @@
 import logging
 import json 
+import argparse
 import pandas as pd
 from google.cloud import storage
 from typing import Dict, List, Optional, Any
 
 from .gc import GoogleClient
+from src.extract import cveExtractor
 from .parser import extract_cvedata
-from .extract import get_years
 
 logging.basicConfig(level=logging.INFO)
 
-# Declaring google client instance globally so multiple functions can use it
-gc = GoogleClient()
-
-# Declaring an empty list globally so that it can be used to create the combined dataset
-combined_proccessed_records = []
-
 def create_combined_table(combined_processed_records: Dict = {}):
-    try:
-        logging.info(f'Creating combined table...')
-        gc.csv_bigquery(files=combined_processed_records)
-    except Exception as e:
-        logging.info(f'Failed to create a combined table: {e}')
+    if not combined_processed_records:
+        logging.error(f'There are no files to process!')
+    else:
+        try:
+            gc = GoogleClient()
+            logging.info(f'Creating combined table...')
+            gc.csv_bigquery(files=combined_processed_records)
+        except Exception as e:
+            logging.info(f'Failed to create a combined table: {e}')
         
 
-def transform_tocsv_load_to_gcs_bq(year: str = ''):
+def transform_tocsv_load_to_gcs_bq(year: str = '1999') -> List[Dict]:
     logging.info(f'Transforming raw json to csv for year: {year}')
 
-    
+    gc = GoogleClient()
     storage_client = gc.storage_client
 
     bucket_id = gc.bucket_name
-
     # fetching the bucket we need
     bucket = storage_client.bucket(bucket_id)
 
@@ -40,7 +38,6 @@ def transform_tocsv_load_to_gcs_bq(year: str = ''):
     blobs = bucket.list_blobs(prefix=blob_prefix)
 
     #logging.info(f'These are the blobs retrived from {bucket_id}: {list(blobs)}')
-
     processed_records = []
 
     for blob in blobs:
@@ -54,7 +51,7 @@ def transform_tocsv_load_to_gcs_bq(year: str = ''):
             cve_data_json = json.loads(content)
 
             #Passing this into the cve json extractor from parser.py
-            record = extract_cvedata(cve_data_json= cve_data_json)
+            record = extract_cvedata(cve_data_json = cve_data_json)
 
             if record:
                 processed_records.append(record)
@@ -62,24 +59,48 @@ def transform_tocsv_load_to_gcs_bq(year: str = ''):
         except Exception as e:
             logging.error(f'Failed to download blob contents and create a record!: {e}') 
 
-    #logging.info(f'These are the processed records: {processed_records}')
+    return processed_records
 
-    # add to combined proccessed records
-    combined_proccessed_records.extend(processed_records)
 
-    # Use the custom bigquery function to parse the year object as a new table
-    gc.csv_bigquery(files = processed_records, year=year)
-    
+def run():
+    # Creating a argument parser using the argparse library
+    argparser = argparse.ArgumentParser(description= 'Transform raw CVE json text files to structured BigQuery tables')
 
-if __name__ == '__main__':
-    #years = ['1999', '2000']
+    # adding years flag arugument to the argument parser
+    argparser.add_argument('--years', action='store_true', help='Pass years thru comma separated input. If not, get years from cve-raws-bucket bucket')
 
-    years = get_years()
+    # Adding years list argument for custom 
+    argparser.add_argument('testyears', type=str, help='Years list passed after years flag, can be custom list for test purposes or entire list of years using get_years() function from extractor')
+
+    args = argparser.parse_args()
+
+    if args.testyears:
+        # testing
+        years = args.testyears.split(',')
+    else:
+        # Automated
+        extractor = cveExtractor()
+        years = extractor.get_years()
+
+    combined_proccessed_records = []
 
     for year in years:
-        transform_tocsv_load_to_gcs_bq(year)
+        year = year.strip()
 
-    create_combined_table(combined_processed_records=combined_proccessed_records)
+        try:
+            record = transform_tocsv_load_to_gcs_bq(year)
+            combined_proccessed_records.extend(record)
+        except Exception as e:
+            logging.error(f'Failed to process for year {year}: {e}')
+    
+    if combined_proccessed_records:
+        create_combined_table(combined_processed_records=combined_proccessed_records)
+    else:
+        logging.warning(f'Error creating combined table!')
+
+
+if __name__ == '__main__':
+    run()
 
     
 
