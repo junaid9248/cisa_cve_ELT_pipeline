@@ -31,7 +31,7 @@ class cveExtractor():
         self.islocal = islocal
 
         #Instantiating a gc class if remote execution
-        if not self.islocal:
+        if self.islocal == False:
             self.google_client = GoogleClient()
             logging.info(f'Instantiated a google client for remote upload')
         else:

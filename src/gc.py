@@ -141,7 +141,7 @@ class GoogleClient():
 
                     # Return obj is a list of errors. Each element has propert
                     for error in fill_errors:
-                        logging.warning(f'Error inserting at {error['index']}: error:{error['errors']}')
+                        logging.warning(f'Error inserting: {error}')
                 else:
                     logging.info(f'Successfully inserted rows for table: {table_ref}')
 

@@ -20,6 +20,8 @@ if __name__ == '__main__':
     # Argument for custom, reduced list of years passed in either mode for testing purposes 
     argparser.add_argument('testyearslist', type= str, help='Comma separated years list passed manually for testing')
 
+    is_local_mode = bool(IS_LOCAL)
+
 
     args = argparser.parse_args()
 

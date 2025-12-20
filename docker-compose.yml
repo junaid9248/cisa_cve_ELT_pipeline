@@ -6,13 +6,13 @@ services:
   postgres:
     image: postgres:13
     environment:
-      POSTGRES_USER: junaid
-      POSTGRES_PASSWORD: password123
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
       POSTGRES_DB: airflow
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "junaid"]
+      test: ["CMD", "pg_isready", "-U", "airflow"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -20,30 +20,34 @@ services:
 
   #Service 2: Airflow Webserver
   airflow-webserver:
-    image: apache/airflow:2.7.0-python3.9
+    build: .
+
+    image: cve-airflow:latest
     depends_on:
       - postgres
     environment:
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/repo/dags
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://junaid:password123@postgres/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW__API__SECRET_KEY: 'new0535341996!'
+      # For later version of Airflow, default auth manager is SimpleAuthManager so we change it to FabAuthManager
+      AIRFLOW__CORE__AUTH_MANAGER: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
       PYTHONPATH: /opt/airflow/repo/src
     ports:
       - "8080:8080"
     volumes:
       - ./:/opt/airflow/repo
 
-    command: bash -c "airflow db upgrade && 
+    command: bash -c "airflow db migrate && 
                       airflow users create 
                       --username airflow 
                       --password airflow 
                       --firstname Air 
                       --lastname Flow 
                       --role Admin 
-                      --email junaidwork465@gmail.com 
-                      || true
-                      && airflow webserver"
+                      --email junaidwork456@gmail.com
+                      && airflow api-server"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -53,13 +57,16 @@ services:
 
   #Service 3: Airflow Scheduler
   airflow-scheduler:
-    image: apache/airflow:2.7.0-python3.9
+    build: .
+
+    image: cve-airflow:latest
     depends_on:
       - postgres
     environment:
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/repo/dags
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://junaid:password123@postgres/airflow
+      AIRFLOW__CORE__AUTH_MANAGER: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
       PYTHONPATH: /opt/airflow/repo/src
 

@@ -9,6 +9,7 @@ google-cloud-storage
 google-cloud-bigquery
 db-dtypes
 docker
+pytest
 pandas
 apache-airflow
 timedelta
