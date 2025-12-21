@@ -31,3 +31,9 @@ Thumbs.db
 **/.env
 **/*.key
 **/.ssh/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd

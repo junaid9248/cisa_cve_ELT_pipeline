@@ -34,6 +34,9 @@ services:
       AIRFLOW__API__SECRET_KEY: 'new0535341996!'
       # For later version of Airflow, default auth manager is SimpleAuthManager so we change it to FabAuthManager
       AIRFLOW__CORE__AUTH_MANAGER: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
+      # For pointing to the 
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: "http://webserver:8080/execution/"
+      AIRFLOW__API_AUTH__JWT_SECRET: "jwt_secret_string"      
       PYTHONPATH: /opt/airflow/repo/src
     ports:
       - "8080:8080"
@@ -69,6 +72,8 @@ services:
       AIRFLOW__CORE__AUTH_MANAGER: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: "http://webserver:8080/execution/"
+      AIRFLOW__API_AUTH__JWT_SECRET: "jwt_secret_string" 
       PYTHONPATH: /opt/airflow/repo/src
 
     volumes:
