@@ -10,6 +10,42 @@ from src.config import GCLOUD_API_KEY, GCLOUD_BUCKETNAME, GCLOUD_APP_CREDENTIALS
 
 logging.basicConfig(level = logging.INFO)
 
+year_table_schema = [
+                    bigquery.SchemaField('cve_id', 'STRING', mode='REQUIRED', description='Unique CVE identifier'),
+                    bigquery.SchemaField("published_date", "STRING", description="Date first published"),
+                    bigquery.SchemaField("updated_date", "STRING", description="Latest date updated"),
+                    bigquery.SchemaField('cisa_kev','STRING', description='If appeared in CISA KEV catalog'),
+                    bigquery.SchemaField('cisa_kev_date', 'STRING', description='Date appeared in CISA KEV catalog'),
+
+                    bigquery.SchemaField('cvss_version', 'STRING', description='CVSS version recorded'),
+
+                    bigquery.SchemaField('base_score', 'STRING', description='Base CVSS score for CVE entry'),
+
+                    bigquery.SchemaField('base_severity', 'STRING', description='Severity classiication for CVE entry'),
+
+                    bigquery.SchemaField('attack_vector', 'STRING', description='Attack vector for attacks'),
+
+                    bigquery.SchemaField('attack_complexity', 'STRING', description='Complexity of attack'),
+                    bigquery.SchemaField('privileges_required', 'STRING', description='Level of privillege required'),
+                    bigquery.SchemaField('user_interaction', 'STRING', description='Level of user interaction needed'),
+                    bigquery.SchemaField('scope', 'STRING'),
+
+                    bigquery.SchemaField('confidentiality_impact', 'STRING', description='If confidentiality of system affected'),
+                    bigquery.SchemaField('integrity_impact', 'STRING', description='If integrity of system affected'),
+                    bigquery.SchemaField('availability_impact', 'STRING', description='If availability of system affected'),
+
+                    bigquery.SchemaField('ssvc_timestamp', 'STRING', description='Date SSVC score was added'),
+                    bigquery.SchemaField('ssvc_exploitation', 'STRING', description='Whether exploitable'),
+                    bigquery.SchemaField('ssvc_automatable', 'STRING', description='Whether automatable'),
+                    bigquery.SchemaField('ssvc_technical_impact', 'STRING', description='SSVC impact level'),
+                    bigquery.SchemaField('ssvc_decision', 'STRING', description='SSVC decision for metrics'),
+
+                    bigquery.SchemaField('impacted_vendor', 'STRING', description='List of vendors impacted'),
+                    bigquery.SchemaField('impacted_products', 'STRING', mode='REPEATED', description='List of products impacted'),
+                    bigquery.SchemaField('vulnerable_versions', 'STRING', mode='REPEATED', description='List of product versions impacted'),
+
+                    bigquery.SchemaField('cwe_number', 'STRING', description='CWE description number'),
+                    bigquery.SchemaField('cwe_description', 'STRING', description='Description of CWE')]
 class GoogleClient():
 
     def __init__(self, bucket_name: str = GCLOUD_BUCKETNAME):
@@ -54,12 +90,11 @@ class GoogleClient():
         
         except Exception as e:
             logging.warning(f'Failed to upload {year} csv to GCS bucket {self.bucket_name}: {e}')
- 
+    
 
-    def combined_staging_table_bigquery(self, files :List= [], year:str = 'combined_staging'):
+    def combined_staging_table_bigquery(self, files :List= [], year: Optional[str] = 'combined_staging'):
 
-
-        dataset_id = 'cisa-cve-data-pipeline.cve_all'
+        dataset_id = f'{self.projectID}.cve_all'
         dataset_exists = False
 
         try:               
@@ -74,49 +109,11 @@ class GoogleClient():
             logging.warning(f'Error creating dataset: {e}')
             dataset_exists = False
     
-
         
         # If dataset exists proceeding with table creation or update
         if dataset_exists:
             table_id = f'cve_{year}_table'
             table_ref = f'{dataset_id}.{table_id}'
-
-            year_table_schema = [
-                        bigquery.SchemaField('cve_id', 'STRING', mode='REQUIRED', description='Unique CVE identifier'),
-                        bigquery.SchemaField("published_date", "STRING", description="Date first published"),
-                        bigquery.SchemaField("updated_date", "STRING", description="Latest date updated"),
-                        bigquery.SchemaField('cisa_kev','STRING', description='If appeared in CISA KEV catalog'),
-                        bigquery.SchemaField('cisa_kev_date', 'STRING', description='Date appeared in CISA KEV catalog'),
-
-                        bigquery.SchemaField('cvss_version', 'STRING', description='CVSS version recorded'),
-
-                        bigquery.SchemaField('base_score', 'STRING', description='Base CVSS score for CVE entry'),
-
-                        bigquery.SchemaField('base_severity', 'STRING', description='Severity classiication for CVE entry'),
-
-                        bigquery.SchemaField('attack_vector', 'STRING', description='Attack vector for attacks'),
-
-                        bigquery.SchemaField('attack_complexity', 'STRING', description='Complexity of attack'),
-                        bigquery.SchemaField('privileges_required', 'STRING', description='Level of privillege required'),
-                        bigquery.SchemaField('user_interaction', 'STRING', description='Level of user interaction needed'),
-                        bigquery.SchemaField('scope', 'STRING'),
-
-                        bigquery.SchemaField('confidentiality_impact', 'STRING', description='If confidentiality of system affected'),
-                        bigquery.SchemaField('integrity_impact', 'STRING', description='If integrity of system affected'),
-                        bigquery.SchemaField('availability_impact', 'STRING', description='If availability of system affected'),
-
-                        bigquery.SchemaField('ssvc_timestamp', 'STRING', description='Date SSVC score was added'),
-                        bigquery.SchemaField('ssvc_exploitation', 'STRING', description='Whether exploitable'),
-                        bigquery.SchemaField('ssvc_automatable', 'STRING', description='Whether automatable'),
-                        bigquery.SchemaField('ssvc_technical_impact', 'STRING', description='SSVC impact level'),
-                        bigquery.SchemaField('ssvc_decision', 'STRING', description='SSVC decision for metrics'),
-
-                        bigquery.SchemaField('impacted_vendor', 'STRING', description='List of vendors impacted'),
-                        bigquery.SchemaField('impacted_products', 'STRING', mode='REPEATED', description='List of products impacted'),
-                        bigquery.SchemaField('vulnerable_versions', 'STRING', mode='REPEATED', description='List of product versions impacted'),
-
-                        bigquery.SchemaField('cwe_number', 'STRING', description='CWE description number'),
-                        bigquery.SchemaField('cwe_description', 'STRING', description='Description of CWE')]
             
             # Defining the new table object
             new_table = bigquery.Table(table_ref, schema= year_table_schema)
@@ -147,61 +144,52 @@ class GoogleClient():
             except Exception as e:
                 logging.warning(f'failed to create table: {e}')
 
-def combined_final_table_bigquery(self, query: str = '', year: str = 'combined_final'):
-    dataset_id = 'cisa-cve-data-pipeline.cve_all'
-    dataset_exists = False
-
-    try:               
-        #Create a bigquery dataset object
-        dataset = bigquery.Dataset(dataset_id)
-        dataset.location = 'US'
-
-        dataset = self.bigquery_client.create_dataset(dataset=dataset, exists_ok=True ,timeout=30)
-        logging.info(f'Successfully created: {dataset.dataset_id} in {self.bigquery_client.project}')
-        dataset_exists = True
-    except Exception as e:
-        logging.warning(f'Error creating dataset: {e}')
+    def combined_final_table_bigquery(self, query: str = '', year: Optional[str] = 'combined_final'):
+        dataset_id = 'cisa-cve-data-pipeline.cve_all'
         dataset_exists = False
 
-    
-    if dataset_exists:
-        table_id = f'cve_{year}_table'
-        table_ref = f'{dataset_id}.{table_id}'
-        
-        year_table_schema = [
-                    bigquery.SchemaField('cve_id', 'STRING', mode='REQUIRED', description='Unique CVE identifier'),
-                    bigquery.SchemaField("published_date", "STRING", description="Date first published"),
-                    bigquery.SchemaField("updated_date", "STRING", description="Latest date updated"),
-                    bigquery.SchemaField('cisa_kev','STRING', description='If appeared in CISA KEV catalog'),
-                    bigquery.SchemaField('cisa_kev_date', 'STRING', description='Date appeared in CISA KEV catalog'),
+        try:               
+            #Create a bigquery dataset object
+            dataset = bigquery.Dataset(dataset_id)
+            dataset.location = 'US'
 
-                    bigquery.SchemaField('cvss_version', 'STRING', description='CVSS version recorded'),
+            dataset = self.bigquery_client.create_dataset(dataset=dataset, exists_ok=True ,timeout=30)
+            logging.info(f'Successfully created: {dataset.dataset_id} in {self.bigquery_client.project}')
+            dataset_exists = True
+        except Exception as e:
+            logging.warning(f'Error creating dataset: {e}')
+            dataset_exists = False
 
-                    bigquery.SchemaField('base_score', 'STRING', description='Base CVSS score for CVE entry'),
+        if dataset_exists:
+            # Ensure final table exists (one-time schema clone from staging)
+            final_table_id = f"{dataset_id}.cve_combined_final_table"
+            staging_table_id = f"{dataset_id}.cve_{year}_table"
+            try:
+                # Try to get final table if it exists
+                self.bigquery_client.get_table(final_table_id)
+            except Exception:
+                logging.error(f'Final table {final_table_id} does not exist. Attempting to create it...')
+                new_table = bigquery.Table(final_table_id, schema= year_table_schema)
+                self.bigquery_client.create_table(table= new_table, exists_ok=True)
 
-                    bigquery.SchemaField('base_severity', 'STRING', description='Severity classiication for CVE entry'),
+            # Skipping merge if staging table is empty
+            staging_table = self.bigquery_client.get_table(staging_table_id)
+            if staging_table.num_rows == 0:
+                logging.info("Staging table is empty; skipping MERGE.")
+                return
 
-                    bigquery.SchemaField('attack_vector', 'STRING', description='Attack vector for attacks'),
+            # Run merge query to update final table
+            try: 
+            
+                query_job = self.bigquery_client.query(query)
+                results = query_job.result()
+                logging.info(f'Successfully updated final table: {final_table_id}: {results}')
+            except Exception as e:
+                logging.warning(f'Failed to update final table: {e}')
 
-                    bigquery.SchemaField('attack_complexity', 'STRING', description='Complexity of attack'),
-                    bigquery.SchemaField('privileges_required', 'STRING', description='Level of privillege required'),
-                    bigquery.SchemaField('user_interaction', 'STRING', description='Level of user interaction needed'),
-                    bigquery.SchemaField('scope', 'STRING'),
+                
 
-                    bigquery.SchemaField('confidentiality_impact', 'STRING', description='If confidentiality of system affected'),
-                    bigquery.SchemaField('integrity_impact', 'STRING', description='If integrity of system affected'),
-                    bigquery.SchemaField('availability_impact', 'STRING', description='If availability of system affected'),
 
-                    bigquery.SchemaField('ssvc_timestamp', 'STRING', description='Date SSVC score was added'),
-                    bigquery.SchemaField('ssvc_exploitation', 'STRING', description='Whether exploitable'),
-                    bigquery.SchemaField('ssvc_automatable', 'STRING', description='Whether automatable'),
-                    bigquery.SchemaField('ssvc_technical_impact', 'STRING', description='SSVC impact level'),
-                    bigquery.SchemaField('ssvc_decision', 'STRING', description='SSVC decision for metrics'),
 
-                    bigquery.SchemaField('impacted_vendor', 'STRING', description='List of vendors impacted'),
-                    bigquery.SchemaField('impacted_products', 'STRING', mode='REPEATED', description='List of products impacted'),
-                    bigquery.SchemaField('vulnerable_versions', 'STRING', mode='REPEATED', description='List of product versions impacted'),
 
-                    bigquery.SchemaField('cwe_number', 'STRING', description='CWE description number'),
-                    bigquery.SchemaField('cwe_description', 'STRING', description='Description of CWE')]
-
+       
