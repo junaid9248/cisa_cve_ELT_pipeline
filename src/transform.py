@@ -16,8 +16,9 @@ def create_combined_table(combined_processed_records: Dict = {}):
     else:
         try:
             gc = GoogleClient()
-            logging.info(f'Creating combined table...')
-            gc.csv_bigquery(files=combined_processed_records)
+            logging.info(f'Creating combined staging table...')
+            # This table will be merged with the final table in BigQuery
+            gc.combined_staging_table_bigquery(files=combined_processed_records)
         except Exception as e:
             logging.info(f'Failed to create a combined table: {e}')
         
@@ -34,12 +35,12 @@ def transform_tocsv_load_to_gcs_bq(year: str = '1999') -> List[Dict]:
 
     # fetching raw jsons using blob names
     blob_prefix = f'{year}/'
-    blobs = bucket.list_blobs(prefix=blob_prefix)
+    year_cve_raws_blobs = bucket.list_blobs(prefix=blob_prefix)
 
     #logging.info(f'These are the blobs retrived from {bucket_id}: {list(blobs)}')
     processed_records = []
 
-    for blob in blobs:
+    for blob in year_cve_raws_blobs:
         if not blob.name.endswith('.json'):
             continue
 

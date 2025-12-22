@@ -35,7 +35,7 @@ services:
       # For later version of Airflow, default auth manager is SimpleAuthManager so we change it to FabAuthManager
       AIRFLOW__CORE__AUTH_MANAGER: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
       AIRFLOW__CORE__HOSTNAME_CALLABLE: "airflow.utils.net.get_host_ip_address"
-      PYTHONPATH: /opt/airflow/repo/src
+      PYTHONPATH: /opt/airflow/repo
       GCLOUD_APP_CREDENTIALS: /opt/airflow/secrets/cisa-cve-data-pipeline-a26a62e94ef3.json
     ports:
       - "8080:8080"
@@ -74,7 +74,7 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
       AIRFLOW__CORE__HOSTNAME_CALLABLE: "airflow.utils.net.get_host_ip_address"
       AIRFLOW__WEBSERVER__SECRET_KEY: 'new0535341996!'
-      PYTHONPATH: /opt/airflow/repo/src
+      PYTHONPATH: /opt/airflow/repo
       GCLOUD_APP_CREDENTIALS: /opt/airflow/secrets/cisa-cve-data-pipeline-a26a62e94ef3.json
 
 
