@@ -224,7 +224,7 @@ class cveExtractor():
         
 
 
-    def extract_store_cve_data(self, year_data: Dict = {}, maxworkers: int = 10):
+    def extract_store_cve_data(self, year_data: Dict = {}, maxworkers: int = 50):
 
         year = year_data['year']
         logging.info(f" Starting to process year data for {year}...")

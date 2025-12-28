@@ -5,6 +5,7 @@ python-dotenv==1.1.1
 requests==2.32.4
 urllib3==2.5.0
 kaggle==1.5.16
+gcloud
 google-cloud-storage
 google-cloud-bigquery
 google-cloud-secret-manager
