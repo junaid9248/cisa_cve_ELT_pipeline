@@ -19,15 +19,15 @@ GOOGLE_APPLICATION_CREDENTIALS = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'
 GCLOUD_BUCKETNAME = os.environ.get('GCLOUD_BUCKETNAME')
 
 year_table_schema = [
-                    bigquery.SchemaField('cve_id', 'STRING', mode='REQUIRED', description='Unique CVE identifier'),
-                    bigquery.SchemaField("published_date", "STRING", description="Date first published"),
-                    bigquery.SchemaField("updated_date", "STRING", description="Latest date updated"),
-                    bigquery.SchemaField('cisa_kev','STRING', description='If appeared in CISA KEV catalog'),
-                    bigquery.SchemaField('cisa_kev_date', 'STRING', description='Date appeared in CISA KEV catalog'),
+                    bigquery.SchemaField(name = 'cve_id', field_type = 'STRING', mode='REQUIRED', description='Unique CVE identifier'),
+                    bigquery.SchemaField("published_date", "TIMESTAMP", description="Date first published"),
+                    bigquery.SchemaField("updated_date", "TIMESTAMP", description="Latest date updated"),
+                    bigquery.SchemaField('cisa_kev','BOOLEAN', description='If appeared in CISA KEV catalog'),
+                    bigquery.SchemaField('cisa_kev_date', 'DATE', description='Date appeared in CISA KEV catalog'),
 
-                    bigquery.SchemaField('cvss_version', 'STRING', description='CVSS version recorded'),
+                    bigquery.SchemaField('cvss_version', 'FLOAT', description='CVSS version recorded'),
 
-                    bigquery.SchemaField('base_score', 'STRING', description='Base CVSS score for CVE entry'),
+                    bigquery.SchemaField('base_score', 'FLOAT', description='Base CVSS score for CVE entry'),
 
                     bigquery.SchemaField('base_severity', 'STRING', description='Severity classiication for CVE entry'),
 
@@ -42,9 +42,9 @@ year_table_schema = [
                     bigquery.SchemaField('integrity_impact', 'STRING', description='If integrity of system affected'),
                     bigquery.SchemaField('availability_impact', 'STRING', description='If availability of system affected'),
 
-                    bigquery.SchemaField('ssvc_timestamp', 'STRING', description='Date SSVC score was added'),
+                    bigquery.SchemaField('ssvc_timestamp', 'TIMESTAMP', description='Date SSVC score was added'),
                     bigquery.SchemaField('ssvc_exploitation', 'STRING', description='Whether exploitable'),
-                    bigquery.SchemaField('ssvc_automatable', 'STRING', description='Whether automatable'),
+                    bigquery.SchemaField('ssvc_automatable', 'BOOLEAN', description='Whether automatable'),
                     bigquery.SchemaField('ssvc_technical_impact', 'STRING', description='SSVC impact level'),
                     bigquery.SchemaField('ssvc_decision', 'STRING', description='SSVC decision for metrics'),
 
@@ -184,7 +184,7 @@ class GoogleClient():
     
         # If dataset exists proceeding with table creation or update
         if dataset_exists:
-            table_id = f'cve_combined_staging_table'
+            table_id = f'cve_{year}_table'
             table_ref = f'{dataset_id}.{table_id}'
             try:
                 table = self.bigquery_client.get_table(table_ref)
@@ -206,20 +206,42 @@ class GoogleClient():
             logging.info("Truncated staging table before insert: %s", table_ref)
 
             # Inserting data into the staging table
-            rows_to_insert = files                    
+            rows_to_insert = files  
+
+            #Creating a newline delimited JSON from the list of raw cve json dicts
+            files_in_bytes = io.BytesIO(b'\n'.join(json.dumps(row).encode('UTF-8') for row in rows_to_insert))
+
+            # Configuring the load job with the source format as the newline delimited json
+            job_config =bigquery.LoadJobConfig(
+                source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+                autodetect = True
+            )
+
+            # Starting the load job which loads all files from created bytes file into the table
+            # load_table_from_file() returns a LoadJob class
+            load_job = self.bigquery_client.load_table_from_file(
+                file_obj= files_in_bytes,
+                destination=table_ref,
+                job_config= job_config
+            ) 
+
+            load_job.result()
+            logging.info(f'Load job finished. Successfully loaded {table_ref} table.')
+
+            '''          
             fill_errors = self.bigquery_client.insert_rows_json(
                 table = table_ref,
                 json_rows= rows_to_insert
             )
 
             if fill_errors:
-                logging.ERROR(f'Error while filling rows for table {table_ref}')
+                logging.error(f'Error while filling rows for table {table_ref}: {fill_errors}')
 
                 # Return obj is a list of errors. Each element has propert
                 for error in fill_errors:
                     logging.warning(f'Error inserting: {error}')
             else:
-                logging.info(f'Successfully inserted rows for table: {table_ref}')
+                logging.info(f'Successfully inserted rows for table: {table_ref}')'''
 
     def combined_final_table_bigquery(self, query: str = '', year: Optional[str] = 'combined_final'):
 

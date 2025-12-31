@@ -87,12 +87,12 @@ class cveExtractor():
             if rate_limit_remaining:
                 print(f"✓ API Rate limit remaining: {rate_limit_remaining}")
                 if int(rate_limit_remaining) < 60:
-                    logging.warning("⚠️  Warning: Low rate limit remaining. Consider using a GitHub token.")
+                    logging.warning("Low rate limit remaining. Consider using a GitHub token.")
             
             return True
 
         else:
-            logging.error(f"❌ Failed to get file : {response.status_code}")
+            logging.error(f"Failed to get file : {response.status_code}")
             return False
         
     def get_years(self) -> List[str]:
@@ -175,20 +175,20 @@ class cveExtractor():
                                 })
                                 file_count += 1
                         
-                        logging.info(f"       ✅ Added {file_count} CVE files from {subdir_name}")
+                        logging.info(f"Added {file_count} CVE files from {subdir_name}")
                     else:
-                        logging.error(f"       ❌ Failed to get {subdir_name}: {subdir_response.status_code}")
+                        logging.error(f"Failed to get {subdir_name}: {subdir_response.status_code}")
                         if subdir_response.status_code != 200:
-                            logging.error(f"       📝 Error details: {subdir_response.text[:200]}")
+                            logging.error(f"Error details: {subdir_response.text[:200]}")
             else:
-                logging.error(f"❌ Failed to get year {year}: {response.status_code}")
-                logging.error(f"📝 Error details: {response.text[:200]}")
+                logging.error(f"Failed to get year {year}: {response.status_code}")
+                logging.error(f"Error details: {response.text[:200]}")
 
         except requests.RequestException as e:
-            logging.error(f"❌ Network error: {e}")
+            logging.error(f"Network error: {e}")
 
         total_files = sum(len(files) for files in year_data['subdirs'].values())
-        logging.info(f"✅ Summary: {total_files} total CVE files across {len(year_data['subdirs'])} subdirectories for {year} year added")
+        logging.info(f"Summary: {total_files} total CVE files across {len(year_data['subdirs'])} subdirectories for {year} year added")
 
         return year_data
     
@@ -348,7 +348,7 @@ class cveExtractor():
                 return extracted_data
 
         except json.JSONDecodeError as e:
-                logging.error(f"❌ JSON parsing error for {file_name}: {e}")
+                logging.error(f"JSON parsing error for {file_name}: {e}")
 
     
 

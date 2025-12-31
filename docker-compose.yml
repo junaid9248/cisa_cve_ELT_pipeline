@@ -32,14 +32,15 @@ services:
       # For later version of Airflow, default auth manager is SimpleAuthManager so we change it to FabAuthManager
       AIRFLOW__CORE__AUTH_MANAGER: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
       AIRFLOW__CORE__HOSTNAME_CALLABLE: "airflow.utils.net.get_host_ip_address"
-      
+
+      # Env vars passed hard passed thru the docker-compose 
       IS_LOCAL: 'false'
       GCLOUD_PROJECTNAME: "cisa-cve-data-pipeline"
       GOOGLE_APPLICATION_CREDENTIALS: 'secrets/cisa-cve-data-pipeline-a26a62e94ef3.json'
       PYTHONPATH: /opt/airflow/repo
-      GH_TOKEN: ${GH_TOKEN}
 
-      # Docker Compose automatically loads these from .env
+      #Env vars sourced from .env file
+      GH_TOKEN: ${GH_TOKEN}
       GCLOUD_BUCKETNAME: ${GCLOUD_BUCKETNAME}
       MY_EMAIL: ${MY_EMAIL}
       AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY}
@@ -81,13 +82,14 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
       AIRFLOW__CORE__HOSTNAME_CALLABLE: "airflow.utils.net.get_host_ip_address"
-      # Non-critcal env vars
+
+      # Env vars passed hard passed thru the docker-compose 
       IS_LOCAL: 'false'
       GCLOUD_PROJECTNAME: "cisa-cve-data-pipeline"
       GOOGLE_APPLICATION_CREDENTIALS: 'secrets/cisa-cve-data-pipeline-a26a62e94ef3.json'
       PYTHONPATH: /opt/airflow/repo  
 
-      # Docker Compose automatically loads these from .env
+      #Env vars sourced from .env file
       GH_TOKEN: ${GH_TOKEN}
       GCLOUD_BUCKETNAME: ${GCLOUD_BUCKETNAME}
       MY_EMAIL: ${MY_EMAIL}

@@ -58,6 +58,7 @@ def transform_tocsv_load_to_gcs_bq(year: str = '1999') -> List[Dict]:
     #logging.info(f'This is list of all blobs that will be downloaded from {year} blob: {jsons_list}')
     
     try:
+        logging.info(f'Starting raw json downloads from GCS data lake now....')
         #using transfer manager to download all blobs to a temp folder
         results = transfer_manager.download_many_to_path(
             bucket = bucket,
@@ -73,7 +74,7 @@ def transform_tocsv_load_to_gcs_bq(year: str = '1999') -> List[Dict]:
 
     for i, result in enumerate(results):
         if isinstance(result, Exception):
-            logging.error(f'Failed to process record : {e}')
+            logging.error(f'Failed to process record {jsons_list[i]}: {result}')
         else:
             downloaded_records.append((jsons_list[i], f'/tmp/cve_blob_downloaded/{jsons_list[i]}'))
 
@@ -131,8 +132,6 @@ def run():
         try:
             processed_records= transform_tocsv_load_to_gcs_bq(year)
             #logging.info(f'These are the processed records for {year}: {processed_records}')
-
-
             combined_proccessed_records.extend(processed_records)
         except Exception as e:
             logging.error(f'Failed to process for year {year}: {e}')
