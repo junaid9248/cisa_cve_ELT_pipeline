@@ -15,6 +15,9 @@ def load_ndjsons_to_bq(year: str = '', isTruncated: bool = False):
     googleclient = GoogleClient()
     bucket_id = googleclient.bucket_name
 
+    gcs_ndjsonblob_uri = f"gs://{bucket_id}/NDjson_files/{year}/*.ndjson"
+    googleclient.create_fill_raws_table(source_uri=gcs_ndjsonblob_uri, isTruncated= isTruncated, year = year)
+    '''
     #create a bucket object with or bucker id
     bucket = googleclient.storage_client.bucket(bucket_name=bucket_id)
     #Fetch all blobs for the year
@@ -24,8 +27,9 @@ def load_ndjsons_to_bq(year: str = '', isTruncated: bool = False):
     for blob in yearly_ndjson_blobs:
         if not blob.name.endswith(".ndjson"):
             continue
-        gcs_ndjsonblob_uri = f'gs://{bucket_id}/{year}/{blob.name}'
-        googleclient.create_fill_raws_table(source_uri=gcs_ndjsonblob_uri)
+        gcs_ndjsonblob_uri = f'gs://{bucket_id}/{blob.name}'
+        googleclient.create_fill_raws_table(source_uri=gcs_ndjsonblob_uri, isTruncated= isTruncated)
+        '''
 
 def run():
     # Creating a argument parser using the argparse library
@@ -51,6 +55,7 @@ def run():
     isTruncated = False
     for year in years:
         load_ndjsons_to_bq(year=year, isTruncated = isTruncated)
+        isTruncated = True
 
 
 if __name__ == '__main__':

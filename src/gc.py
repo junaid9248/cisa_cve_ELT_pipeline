@@ -56,7 +56,7 @@ year_table_schema = [
                     bigquery.SchemaField('cwe_description', 'STRING', description='Description of CWE')]
 
 raws_table_schema = [
-    bigquery.SchemaField(name = 'cve_id', field_type = 'STRING', mode='REQUIRED', description='Unique CVE identifier'),
+    bigquery.SchemaField(name = 'cveId', field_type = 'STRING', mode='REQUIRED', description='Unique CVE identifier'),
     bigquery.SchemaField(name = 'year', field_type = 'INT64', mode='REQUIRED', description='Year of CVE entry'),
     bigquery.SchemaField(name= 'filename_string', field_type='STRING', mode='REQUIRED', description='String URI ro retrive raw json from GCS bucket'),
     bigquery.SchemaField(name='raw_json',field_type='STRING', mode= 'REQUIRED', description='String of raw cve json file')
@@ -110,7 +110,7 @@ class GoogleClient():
             logging.warning(f'Failed to upload {year} csv to GCS bucket {self.bucket_name}: {e}')
     
 
-    def create_fill_raws_table(self, source_uri: str= '', isTruncated: bool = True):
+    def create_fill_raws_table(self, source_uri: str= '', isTruncated: bool = True, year: str = ''):
         dataset_id = f'{self.projectID}.cve_all'
         dataset_exists = False
 
@@ -130,25 +130,28 @@ class GoogleClient():
             table_id = 'cve_raws_table'
             table_ref = f'{dataset_id}.{table_id}'
 
+        
+            table = self.bigquery_client.get_table(table_ref)
             try:
-                table = self.bigquery_client.get_table(table_ref)
-
                 if table:
-                    logging.info(f'The table {table_ref} already exists! ')
+                    
                     if isTruncated is False:
+                        logging.info(f'Table already exists. Truncating it before first entry...')
+
                         truncate_query = f'''
                         TRUNCATE TABLE {table_ref}'''
-
                         query_job = self.bigquery_client.query(truncate_query)
                         query_job.result()
                         logging.info(f'Truncated {table_ref} successfully!')
                 else:
+                    logging.info(f'Table {table_ref} does not exists! Atttempting to create it now...')
                     new_table = bigquery.Table(table_ref, schema=raws_table_schema)
                     self.bigquery_client.create_table(table=new_table, exists_ok=True)
                     updated_table = self.bigquery_client.update_table(table, fields=['schema'])
+            
                     logging.info(f'Successfully created table: {updated_table.table_id} in dataset folder {updated_table.dataset_id}')
             except Exception as e:
-                logging.warning(f'Failed to resolve table {table_ref}: {e}')
+                logging.info(f'Failed to resolved table {table_ref}: {e}')
 
         load_job_config = bigquery.LoadJobConfig(
             schema = raws_table_schema,
@@ -164,7 +167,7 @@ class GoogleClient():
         )
 
         load_job.result()
-        logging.info(f'Load job succesful for {table_ref}')
+        logging.info(f'Load job succesful for year {year} on {table_ref}')
 
 
 
