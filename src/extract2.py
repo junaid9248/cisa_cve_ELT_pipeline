@@ -240,8 +240,8 @@ class cveExtractor():
                         'cveId': cveId,
                         'year': int(year),
                         # Must be a string that will appended to the ndjson file for reading later
-                        'raw_json':json.dumps(cve_json, ensure_ascii=False),
                         'filename_string': filename_string,
+                        'raw_json':json.dumps(cve_json, ensure_ascii=False),
                         }
                         return bronze_table_row 
                                 
@@ -262,17 +262,25 @@ class cveExtractor():
         for (_, files) in year_data['subdirs'].items():
             all_files.extend(files)
 
+
         ndjson_path_for_year = f'/tmp/bronze_cve_{year}.ndjson'
 
         if os.path.exists(ndjson_path_for_year):
             os.remove(ndjson_path_for_year)
+
 
         # parameters for the threadpoolexecuter
         maxworkers = 25
         amp_factor = 5
         max_in_memory = maxworkers * amp_factor
 
-        with open(file= ndjson_path_for_year, mode='w',encoding='UTF-8') as output_file:
+        if self.islocal is False:
+            # Open the file from the temp folder if we are in cloud mode
+            output_file = open(file= ndjson_path_for_year, mode='w',encoding='UTF-8')
+        else:
+            extracted_rows = []
+
+        try:
             with ThreadPoolExecutor(max_workers=maxworkers) as executor:
                 #Create a set to store pending files
                 pending = set()
@@ -298,14 +306,20 @@ class cveExtractor():
                         done, pending = wait(fs=pending, timeout= 30, return_when=FIRST_COMPLETED)
                         
                         for future in done:
-                            result_row = future.result()
+                            result = future.result()
 
-                            if result_row:
-                                ndjson_file = json.dumps(result_row, ensure_ascii= False)
-                                # 
-                                output_file.write(ndjson_file + '\n')
+                            if self.islocal is False:
+                                ndjson_for_cve_row= json.dumps(result, ensure_ascii= False)
+                                output_file.write(ndjson_for_cve_row + '\n')
+                            else:
+                                extracted_data = result.get('extracted_cve_record')
+                                extracted_rows.append(extracted_data)
+
                     except Exception as e:
-                        logging.error(f'Failed to write row for {names_pending_by_future.get(future)} to {ndjson_path_for_year}')
+                        if self.islocal is False:
+                            logging.error(f'Failed to write row for {names_pending_by_future.get(future)} to {ndjson_path_for_year}')
+                        else:
+                            logging.error(f'Failed to append row for {names_pending_by_future.get(future)} to extracted_rows')
 
                     finally:
                         names_pending_by_future.pop(future, None)
@@ -319,14 +333,23 @@ class cveExtractor():
                         names_pending_by_future[next_future] = next_file['name']
                     except StopIteration:
                         pass
-        
+
+        finally:
+            if output_file:
+                output_file.close()
+
+        is_truncated = False
+
         if self.islocal is False:
             try:
-                gcs_ndjson_object_name =f'NDjson_files/{year}/ndjson_{year}_file.ndjson'
-                GoogleClient.upload_blob(filename=gcs_ndjson_object_name, local_filepath=ndjson_path_for_year)
+                gcs_ndjson_blob_name =f'NDjson_files/{year}/ndjson_{year}_file.ndjson'
+                self.google_client.upload_blob(blobname=gcs_ndjson_blob_name, local_filepath=ndjson_path_for_year)
+                
             except Exception as e:
                 logging.warning(f'Something went wrong uploading to GCS bucket ndjson file from {ndjson_path_for_year}:{e}')
 
+        else:
+            self.year_to_csv(year_processed_files=extracted_rows)
 
     
     def year_to_csv(self, year_processed_files: List, year):
@@ -357,7 +380,6 @@ class cveExtractor():
         except Exception as e:
             logging.warning(f'There was an issue creating csv file for {year}: {e}')    
     
-
 
     #DEGUGGING METHOD to extract data for a specific CVE file in the year data
     def extract_data_for_cve_record(self, year_data: Dict, file_name: str):
@@ -393,8 +415,7 @@ class cveExtractor():
     # Psuedo main function called from main.py
     def run(self, years: List[str] = []):
 
-        
-        success= self.test_connection()
+        success = self.test_connection()
 
         # If succesful test connection is established
         if success:

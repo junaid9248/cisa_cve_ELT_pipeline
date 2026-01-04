@@ -1,68 +1,57 @@
-def extract_store_cve_data(self, year_data: Dict = {}, maxworkers: int = 50):
-    year = year_data["year"]
-    logging.info(f"Starting to process year data for {year}...")
+from datetime import datetime
+from typing import Dict, List, Optional
+from dotenv import load_dotenv
+import logging
+import os
+import argparse
+from src.gc import GoogleClient
+from src.extract2 import cveExtractor
 
-    all_files = []
-    for (subdir, files) in list(year_data["subdirs"].items()):
-        all_files.extend(files)
+logging.basicConfig(level=logging.INFO)
+#If not available locally will not execute
+load_dotenv(override=True)
 
-    if not all_files:
-        logging.warning(f"No files found for year {year}")
-        return None
+def load_ndjsons_to_bq(year: str = '', isTruncated: bool = False):
+    googleclient = GoogleClient()
+    bucket_id = googleclient.bucket_name
 
-    max_workers = maxworkers
-    factor = 5
-    max_in_mem = max_workers * factor
+    #create a bucket object with or bucker id
+    bucket = googleclient.storage_client.bucket(bucket_name=bucket_id)
+    #Fetch all blobs for the year
+    blob_prefix = f'NDjson_files/{year}'
+    yearly_ndjson_blobs = bucket.list_blobs(prefix=blob_prefix)
 
-    # one NDJSON output per year
-    local_ndjson_path = f"/tmp/bronze_{year}.ndjson"
-    if os.path.exists(local_ndjson_path):
-        os.remove(local_ndjson_path)
+    for blob in yearly_ndjson_blobs:
+        if not blob.name.endswith(".ndjson"):
+            continue
+        gcs_ndjsonblob_uri = f'gs://{bucket_id}/{year}/{blob.name}'
+        googleclient.create_fill_raws_table(source_uri=gcs_ndjsonblob_uri)
 
-    with open(local_ndjson_path, "w", encoding="utf-8") as out:
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            pending = set()
-            name_by_future = {}
-            files_iter = iter(all_files)
+def run():
+    # Creating a argument parser using the argparse library
+    argparser = argparse.ArgumentParser(description= 'Transform raw CVE ND json text files into a raw bronze table')
 
-            # prime
-            while len(pending) < max_in_mem:
-                try:
-                    current_file = next(files_iter)
-                except StopIteration:
-                    break
-                fut = executor.submit(self.extract_single_cve_file, file=current_file, year=year)
-                pending.add(fut)
-                name_by_future[fut] = current_file["name"]
+    # Adding years list argument for custom 
+    argparser.add_argument('years', 
+                           nargs='?',
+                           type=str,
+                           default=None, 
+                           help='Comma separated years list, can be custom list for test purposes or entire list of years using get_years() function from extractor')
 
-            # drain
-            while pending:
-                done, pending = wait(pending, return_when=FIRST_COMPLETED)
+    args = argparser.parse_args()
 
-                for fut in done:
-                    try:
-                        bronze_row = fut.result()
-                        if bronze_row:
-                            out.write(json.dumps(bronze_row, ensure_ascii=False) + "\n")
-                    except Exception as e:
-                        logging.error(f"Failed to get record from {name_by_future.get(fut)}: {e}")
-                    finally:
-                        name_by_future.pop(fut, None)
+    if args.years:
+        # testing
+        years = args.years.split(',')
+    else:
+        # Automated
+        extractor = cveExtractor()
+        years = extractor.get_years()
 
-                    try:
-                        new_file = next(files_iter)
-                        new_fut = executor.submit(self.extract_single_cve_file, file=new_file, year=year)
-                        pending.add(new_fut)
-                        name_by_future[new_fut] = new_file["name"]
-                    except StopIteration:
-                        pass
+    isTruncated = False
+    for year in years:
+        load_ndjsons_to_bq(year=year, isTruncated = isTruncated)
 
-    # Upload that NDJSON to GCS (cloud mode only)
-    if self.islocal is False:
-        bucket = self.google_client.storage_client.bucket(self.google_client.bucket_name)
-        gcs_object = f"bronze_ndjson/year={year}/bronze_{year}.ndjson"
-        bucket.blob(gcs_object).upload_from_filename(local_ndjson_path)  # upload from file path [web:293]
-        os.remove(local_ndjson_path)
-        logging.info(f"Uploaded bronze NDJSON: gs://{self.google_client.bucket_name}/{gcs_object}")
 
-    return None
+if __name__ == '__main__':
+    run()
