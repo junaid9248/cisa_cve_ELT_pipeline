@@ -1,6 +1,7 @@
 from google.cloud import bigquery, exceptions
 from google.cloud.storage import transfer_manager, Client
 from google.oauth2 import service_account
+from google.api_core.exceptions import NotFound
 
 import os
 import io
@@ -109,65 +110,63 @@ class GoogleClient():
         except Exception as e:
             logging.warning(f'Failed to upload {year} csv to GCS bucket {self.bucket_name}: {e}')
     
+    def check_dataset_exists(self, dataset_id: str = ''):
+            try:
+                #Create a bigquery dataset object
+                dataset = bigquery.Dataset(dataset_id)
+                dataset.location = 'US'
+                dataset = self.bigquery_client.create_dataset(dataset=dataset, exists_ok=True ,timeout=30)
+                return True
+            except Exception as e:
+                logging.info('Failed to create dataset')
+                return False
 
-    def create_fill_raws_table(self, source_uri: str= '', isTruncated: bool = True, year: str = ''):
-        dataset_id = f'{self.projectID}.cve_all'
-        dataset_exists = False
+    # pass a first run parameter to check if dataset exists or table exists, after which we simply just dont check
+    def create_fill_raws_table(self, source_uri: str= '', year: str = '', isFirstRun : bool = True):
+        dataset_id = f'{self.projectID}.sources_bronze'
 
-        try:               
-            #Create a bigquery dataset object
-            dataset = bigquery.Dataset(dataset_id)
-            dataset.location = 'US'
-
-            dataset = self.bigquery_client.create_dataset(dataset=dataset, exists_ok=True ,timeout=30)
-            if dataset:
-                logging.info(f'Successfully created: {dataset.dataset_id} in {self.bigquery_client.project}')
-                dataset_exists = True
-        except Exception as e:
-            logging.warning(f'Error creating dataset: {e}')
-
+        # Only check for dataset existence status for the very first run!
+        if isFirstRun is True:
+            dataset_exists = self.check_dataset_exists(dataset_id)
+        else:
+            dataset_exists = True
+            
         if dataset_exists:
             table_id = 'cve_raws_table'
             table_ref = f'{dataset_id}.{table_id}'
 
-        
-            table = self.bigquery_client.get_table(table_ref)
-            try:
-                if table:
-                    
-                    if isTruncated is False:
-                        logging.info(f'Table already exists. Truncating it before first entry...')
+            if isFirstRun is True:
+                try:
+                    table = self.bigquery_client.get_table(table_ref)
+                    logging.info(f'The table {table_ref} alreeady exists!Truncating it before first entry...')
 
-                        truncate_query = f'''
-                        TRUNCATE TABLE {table_ref}'''
-                        query_job = self.bigquery_client.query(truncate_query)
-                        query_job.result()
-                        logging.info(f'Truncated {table_ref} successfully!')
-                else:
+                    truncate_query = f'''
+                    TRUNCATE TABLE {table_ref}'''
+                    query_job = self.bigquery_client.query(truncate_query)
+                    query_job.result()
+                    logging.info(f'Truncated {table_ref} successfully!')
+                except NotFound:
                     logging.info(f'Table {table_ref} does not exists! Atttempting to create it now...')
                     new_table = bigquery.Table(table_ref, schema=raws_table_schema)
-                    self.bigquery_client.create_table(table=new_table, exists_ok=True)
-                    updated_table = self.bigquery_client.update_table(table, fields=['schema'])
-            
-                    logging.info(f'Successfully created table: {updated_table.table_id} in dataset folder {updated_table.dataset_id}')
-            except Exception as e:
-                logging.info(f'Failed to resolved table {table_ref}: {e}')
+                    table = self.bigquery_client.create_table(table=new_table, exists_ok=True)
+                    logging.info(f'Successfully created table: {table.table_id} in dataset folder {table.dataset_id}')
+                
+            load_job_config = bigquery.LoadJobConfig(
+                schema = raws_table_schema,
+                source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+                write_disposition= bigquery.WriteDisposition.WRITE_APPEND
+            )
 
-        load_job_config = bigquery.LoadJobConfig(
-            schema = raws_table_schema,
-            source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
-            write_disposition= bigquery.WriteDisposition.WRITE_APPEND
-        )
+            load_job = self.bigquery_client.load_table_from_uri(
+                source_uris= source_uri,
+                job_config= load_job_config,
+                destination= table_ref,
+                location='US'
+            )
 
-        load_job = self.bigquery_client.load_table_from_uri(
-            source_uris= source_uri,
-            job_config= load_job_config,
-            destination= table_ref,
-            location='US'
-        )
+            load_job.result()
+            logging.info(f'Load job succesful for year {year} on {table_ref}')
 
-        load_job.result()
-        logging.info(f'Load job succesful for year {year} on {table_ref}')
 
 
 
