@@ -6,30 +6,19 @@ import os
 import argparse
 from src.gc import GoogleClient
 from src.extract2 import cveExtractor
+from time import sleep
+googleclient = GoogleClient()
 
 logging.basicConfig(level=logging.INFO)
 #If not available locally will not execute
 load_dotenv(override=True)
 
-def load_ndjsons_to_bq(year: str = '', isTruncated: bool = False):
-    googleclient = GoogleClient()
+def load_ndjsons_to_bq(year: str = '', isFirstRun: bool = True):
     bucket_id = googleclient.bucket_name
 
     gcs_ndjsonblob_uri = f"gs://{bucket_id}/NDjson_files/{year}/*.ndjson"
-    googleclient.create_fill_raws_table(source_uri=gcs_ndjsonblob_uri, isTruncated= isTruncated, year = year)
-    '''
-    #create a bucket object with or bucker id
-    bucket = googleclient.storage_client.bucket(bucket_name=bucket_id)
-    #Fetch all blobs for the year
-    blob_prefix = f'NDjson_files/{year}'
-    yearly_ndjson_blobs = bucket.list_blobs(prefix=blob_prefix)
+    googleclient.create_fill_raws_table(source_uri=gcs_ndjsonblob_uri, isFirstRun= isFirstRun, year = year)
 
-    for blob in yearly_ndjson_blobs:
-        if not blob.name.endswith(".ndjson"):
-            continue
-        gcs_ndjsonblob_uri = f'gs://{bucket_id}/{blob.name}'
-        googleclient.create_fill_raws_table(source_uri=gcs_ndjsonblob_uri, isTruncated= isTruncated)
-        '''
 
 def run():
     # Creating a argument parser using the argparse library
@@ -52,10 +41,11 @@ def run():
         extractor = cveExtractor()
         years = extractor.get_years()
 
-    isTruncated = False
+    isFirstRun = True
     for year in years:
-        load_ndjsons_to_bq(year=year, isTruncated = isTruncated)
-        isTruncated = True
+        sleep(5)
+        load_ndjsons_to_bq(year=year, isFirstRun=isFirstRun)
+        isFirstRun = False
 
 
 if __name__ == '__main__':
