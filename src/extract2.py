@@ -1,4 +1,5 @@
 import requests
+from requests.adapters import HTTPAdapter
 import json
 import csv
 import os
@@ -9,8 +10,8 @@ import io
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
+from urllib3.util.retry import Retry
 
-#from src.config import GH_TOKEN
 
 from src.gc import GoogleClient
 
@@ -21,7 +22,7 @@ logging.basicConfig(level=logging.INFO)
 load_dotenv(override=True)
              
 class cveExtractor():
-    def __init__(self, islocal: Optional[bool] = True, branch: str = 'develop', token: Optional[str] = None):
+    def __init__(self, islocal: Optional[bool] = False, branch: str = 'develop', token: Optional[str] = None):
 
         self.branch = branch
         self.base_url = "https://api.github.com"
@@ -33,10 +34,24 @@ class cveExtractor():
             'User-Agent': 'CISA-Vulnrichment-Extractor/1.0',
             'Accept': 'application/vnd.github.v3+json'
         }
+        self.max_workers = 25
+
+        retry_strategy = Retry(
+            total=5,
+            status_forcelist=[429, 500, 502, 503, 504],
+            backoff_factor=1
+        )
+
+        adapter = HTTPAdapter(
+            max_retries= retry_strategy,
+            pool_connections = self.max_workers,
+            pool_maxsize= self.max_workers * 2
+        )
 
         #Establish a new session
         self.session = requests.Session()
-        self.session.headers.update(self.headers)
+        self.session.mount("https://", adapter)
+        #self.session.headers.update(self.headers)
 
         
         GH_TOKEN = os.environ.get('GH_TOKEN')
@@ -46,8 +61,6 @@ class cveExtractor():
         if self.token:
             # Add token to self.headers then update the header to current sessoion by usung update method
             self.session.headers.update({
-                'User-Agent': 'CISA-Vulnrichment-Extractor/1.0',
-                'Accept': 'application/vnd.github.v3+json',
                 'Authorization': f'token {self.token}'})
             logging.info('GitHub token for authentication was found and used to establish session')
         else:
@@ -97,26 +110,6 @@ class cveExtractor():
         else:
             logging.error(f"Failed to get file : {response.status_code}")
             return False
-        
-    def get_years(self) -> List[str]:
-        url = f"{self.base_url}/repos/{self.repo_owner}/{self.repo_name}/contents"
-        try:
-            response = self.session.get(url)
-            if response.status_code == 200:
-                data = response.json()
-                years = []
-
-                for item in data:
-                    if item['type'] == 'dir' and item['name'] not in ['.github', 'assets']:
-                        years.append(item['name'])
-                logging.info(f"Number of available years: {len(years)}")
-                return years
-            else:
-                logging.error(f"Error fetching years: {response.status_code}")
-                return []
-        except requests.RequestException as e:
-            logging.error(f"Error fetching years: {e}")
-            return []
 
     # Method to get all INFORMATION on CVE file entries for each year directory 
     # year_data = {'year' : '1999', subdirs:{'1xxx' : [{'name: 'CVE-01-01-199', 'download_url': url},], '2xxx': [{},{}]}}
@@ -250,7 +243,7 @@ class cveExtractor():
             logging.error(f'Failed to fetch file {file_name} from {file_download_url}: {e}')
         
 
-    def extract_store_cve_data(self, year_data: Dict = {}, maxworkers: int = 50):
+    def extract_store_cve_data(self, year_data: Dict = {}, maxworkers: int = 25):
         year = year_data['year']
         total_files = 0
         for subdir_files in year_data['subdirs'].values():
@@ -271,7 +264,7 @@ class cveExtractor():
 
 
         # parameters for the threadpoolexecuter
-        maxworkers = 25
+        maxworkers = self.max_workers
         amp_factor = 5
         max_in_memory = maxworkers * amp_factor
 

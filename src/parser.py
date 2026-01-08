@@ -122,7 +122,7 @@ def parse_cve_datetime_strings(dt_string: str, column_value: str = '', cve_id: s
     str_list = list(dt_string)
 
     if column_value != 'kevdateAdded' and 'Z' or 'z' in str_list:
-        logging.info(f'Stripping away last index for {cve_id} parsing {column_value}')
+        #logging.info(f'Stripping away last index for {cve_id} parsing {column_value}')
         dt_string= dt_string[:-1]
     
     #Step 2: use the correct format and return a strptime dt object
@@ -135,7 +135,7 @@ def parse_cve_datetime_strings(dt_string: str, column_value: str = '', cve_id: s
         for format in formats:
             try:
                 dt_object = datetime.strptime(dt_string, format)
-                logging.info(f'This is being returned as dt_object for {column_value} and CVE ID {cve_id}: {dt_object}')
+                #logging.info(f'This is being returned as dt_object for {column_value} and CVE ID {cve_id}: {dt_object}')
                 return dt_object
             except Exception as e:
                 logging.error(f'Format error when processing date time for {column_value} for {cve_id} trying the next format: {e} ')
@@ -327,7 +327,7 @@ def extract_cvedata (cve_data_json: Dict = {}):
                                     
                                     # Calculate SSVC decision if all required fields are present
                                     #if cve_entry_template['ssvc_exploitation'] and cve_entry_template['ssvc_automatable'] and cve_entry_template['ssvc_technical_impact']:
-                                        logging.info(f'Getting the ssvc decision for {cve_id}')
+                                        #logging.info(f'Getting the ssvc decision for {cve_id}')
                                         cve_entry_template['ssvc_decision'] = calculate_ssvc_score(
                                             cve_entry_template['ssvc_exploitation'],
                                             cve_entry_template['ssvc_automatable'],
@@ -394,10 +394,10 @@ def extract_cvedata (cve_data_json: Dict = {}):
                     for metric in cna_metrics_container:
                         if isinstance(metric, dict):
                             all_versions_found1.update([version for version in valid_versions1 if version in metric])
-                            logging.info(f" Available CVSS versions in CNA container for {cve_id}: {all_versions_found}")
+                            #logging.info(f" Available CVSS versions in CNA container for {cve_id}: {all_versions_found}")
                     
                     version_key1 = next((version for version in valid_versions1 if version in all_versions_found1), None)
-                    logging.info(f" The latest CVSS version key in CNA metrics container is  {version_key1} for {cve_id}")  
+                    #logging.info(f" The latest CVSS version key in CNA metrics container is  {version_key1} for {cve_id}")  
                     
                     #iterate over all the metrics in the metrics container
                     for metric in cna_metrics_container:
@@ -472,7 +472,7 @@ def extract_cvedata (cve_data_json: Dict = {}):
 
 
     except Exception as e:
-            logging.warning(f"❌ Error in extract_cve_data: {e}")
+            logging.warning(f" Error in extract_cve_data: {e}")
             import traceback
             traceback.print_exc()
             return None

@@ -5,6 +5,8 @@ from src.config import IS_LOCAL
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+
+
 if __name__ == '__main__':
 
     argparser = argparse.ArgumentParser(description='Start cve json raws extraction from github repo in local or cloud mode')
