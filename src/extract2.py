@@ -243,110 +243,82 @@ class cveExtractor():
         except Exception as e:
             logging.error(f'Failed to fetch file {file_name} from {file_download_url}: {e}')
         
+    def files_generator(self, year_data: Dict):
+            for subdir_files in year_data['subdirs'].values():
+                for file in subdir_files:
+                    yield file
 
     def extract_store_cve_data(self, year_data: Dict = {}, maxworkers: int = 25):
         year = year_data['year']
-        total_files = 0
-        for subdir_files in year_data['subdirs'].values():
-            total_files = total_files + len(subdir_files)
         
-        logging.info(f'Starting processing for {total_files} in {year}')
-
-        all_files = []
-
-        for (_, files) in year_data['subdirs'].items():
-            all_files.extend(files)
-
+        # 1. DELETE the all_files list. It's eating Gigs for no reason.
+        # We only need the count for logging.
+        total_files_in_year = sum(len(f) for f in year_data['subdirs'].values())
+        logging.info(f'Starting processing for {total_files_in_year} in {year}')
 
         ndjson_path_for_year = f'/tmp/bronze_cve_{year}.ndjson'
-
         if os.path.exists(ndjson_path_for_year):
             os.remove(ndjson_path_for_year)
 
-
-        # parameters for the threadpoolexecuter
         maxworkers = self.max_workers
         amp_factor = 5
         max_in_memory = maxworkers * amp_factor
 
+        files_iter = self.files_generator(year_data=year_data)
+
+        output_file = None
         if self.islocal is False:
-            # Open the file from the temp folder if we are in cloud mode
-            output_file = open(file= ndjson_path_for_year, mode='w',encoding='UTF-8')
+            output_file = open(file=ndjson_path_for_year, mode='w', encoding='UTF-8')
         else:
             extracted_rows = []
 
         try:
             with ThreadPoolExecutor(max_workers=maxworkers) as executor:
-                #Create a set to store pending files
                 pending = set()
+                names_pending_by_future = {}
 
-                names_pending_by_future ={}
-
-                #Create an iterable object from the all_files list
-                files_iter = iter(all_files)
-
-                while len(pending) < max_in_memory:
-                    # While we are not above the max in memory
+                # Initial fill of the 'pending' bucket
+                for _ in range(max_in_memory):
                     try:
                         current_file = next(files_iter)
+                        future = executor.submit(self.extract_single_cve_file, current_file, year)
+                        pending.add(future)
+                        names_pending_by_future[future] = current_file['name']
                     except StopIteration:
                         break
 
-                    future = executor.submit(self.extract_single_cve_file, current_file, year)
-                    pending.add(future)
-                    names_pending_by_future[future] = current_file['name']
-
                 while pending:
                     try:
-                        done, pending = wait(fs=pending, timeout= 30, return_when=FIRST_COMPLETED)
+                        done, pending = wait(fs=pending, timeout=30, return_when=FIRST_COMPLETED)
                         
                         for future in done:
                             result = future.result()
+                            fname = names_pending_by_future.pop(future, "Unknown")
+                            
                             if result is None:
                                 continue
 
                             if self.islocal is False:
-                                # Converts python dict to json string
-                                ndjson_for_cve_row= json.dumps(result)
-                                output_file.write(ndjson_for_cve_row + '\n')
+                                output_file.write(json.dumps(result) + '\n')
                             else:
-                                extracted_data = result.get('extracted_cve_record')
-                                extracted_rows.append(extracted_data)
+                                extracted_rows.append(result.get('extracted_cve_record'))
+                            
+                            del result 
+
+                            # Pull the next file from the generator to keep the engine running
+                            try:
+                                next_file = next(files_iter)
+                                next_future = executor.submit(self.extract_single_cve_file, next_file, year)
+                                pending.add(next_future)
+                                names_pending_by_future[next_future] = next_file['name']
+                            except StopIteration:
+                                pass
 
                     except Exception as e:
-                        if self.islocal is False:
-                            logging.error(f'Failed to write row for {names_pending_by_future.get(future)} to {ndjson_path_for_year}:{e}')
-                        else:
-                            logging.error(f'Failed to append row for {names_pending_by_future.get(future)} to extracted_rows:{e}')
-
-                    finally:
-                        names_pending_by_future.pop(future, None)
-
-                    # Getting the next file from pending
-                    try:
-                        next_file = next(files_iter)
-                        next_future = executor.submit(self.extract_single_cve_file, file = next_file, year=year)
-
-                        pending.add(next_future)
-                        names_pending_by_future[next_future] = next_file['name']
-                    except StopIteration:
-                        pass
-
+                        logging.error(f'Error processing batch in {year}: {e}')
         finally:
             if output_file:
                 output_file.close()
-
-
-        if self.islocal is False:
-            try:
-                gcs_ndjson_blob_name =f'NDjson_files/{year}/ndjson_{year}_file.ndjson'
-                self.google_client.upload_blob(blobname=gcs_ndjson_blob_name, local_filepath=ndjson_path_for_year)
-
-            except Exception as e:
-                logging.warning(f'Something went wrong uploading to GCS bucket ndjson file from {ndjson_path_for_year}:{e}')
-
-        else:
-            self.year_to_csv(year_processed_files=extracted_rows)
 
     
     def year_to_csv(self, year_processed_files: List, year):
@@ -420,8 +392,8 @@ class cveExtractor():
                 # Since for both local and cloud mode we still get the years
                 # years will be either all the available years (get_years())
                 # or can be the custom list of years for testing
-                year_data = self.get_cve_files_for_year(year)
-                self.extract_store_cve_data(year_data)
+                year_data_file = self.get_cve_files_for_year(year)
+                self.extract_store_cve_data(year_data= year_data_file)
 
 
 
