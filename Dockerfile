@@ -13,8 +13,6 @@ COPY main.py .
 
 ENV PYTHONPATH=/app
 
-ENTRYPOINT ["python", "main.py"]
-
 
 
 
