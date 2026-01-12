@@ -21,7 +21,7 @@ services:
     image: cve-airflow:latest
     depends_on:
       - postgres
-    working_dir: /opt/airflow
+    working_dir: /opt/airflow/repo
     environment:
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/repo/dags
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -40,14 +40,13 @@ services:
       GCLOUD_BUCKETNAME: ${GCLOUD_BUCKETNAME}
       GH_TOKEN: ${GH_TOKEN}
       MY_EMAIL: ${MY_EMAIL}
-      PYTHONPATH: "/opt/airflow/repo"
+      PYTHONPATH: /opt/airflow/repo/src
       GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/repo/secrets/cisa-elt-pipeline.json
     ports:
       - "8080:8080"
     volumes:
-      - ./:/opt/airflow
+      - ./:/opt/airflow/repo
     command: bash -c "
-      airflow db migrate && 
       airflow users create 
       --username airflow 
       --password airflow 
@@ -69,7 +68,7 @@ services:
     image: cve-airflow:latest
     depends_on:
       - postgres
-    working_dir: /opt/airflow
+    working_dir: /opt/airflow/repo
     environment:
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/repo/dags
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -79,10 +78,10 @@ services:
       IS_LOCAL: 'false'
       GCLOUD_PROJECTNAME: ${GCLOUD_PROJECTNAME}
       GCLOUD_BUCKETNAME: ${GCLOUD_BUCKETNAME}
-      PYTHONPATH: "/opt/airflow/repo"
+      PYTHONPATH: /opt/airflow/repo
       GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/repo/secrets/cisa-elt-pipeline.json
     volumes: 
-      - ./:/opt/airflow
+      - ./:/opt/airflow/repo
     command: airflow scheduler
 
 volumes:
