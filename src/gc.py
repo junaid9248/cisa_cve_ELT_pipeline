@@ -160,6 +160,6 @@ class GoogleClient():
                 location='US'
             )
 
-            load_job.result()
+            load_job.result(timeout=3600)
             logging.info(f'Load job succesful for year {year} on {table_ref}')
 
