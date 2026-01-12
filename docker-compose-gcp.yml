@@ -1,0 +1,93 @@
+
+services:
+  # Service 1: PostgreSQL Database
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Service 2: Airflow Webserver
+  airflow-webserver:
+    build: .
+    image: cve-airflow:latest
+    depends_on:
+      - postgres
+    working_dir: /opt/airflow/repo
+    environment:
+      # Airflow Core Config
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/repo/dags
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW__CORE__AUTH_MANAGER: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
+      AIRFLOW__CORE__HOSTNAME_CALLABLE: "airflow.utils.net.get_host_ip_address"
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY}
+
+      # GCP Connections (Using URI format)
+      # We define BOTH IDs to be safe
+      AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT: 'google-cloud-platform://?project_id=${GCLOUD_PROJECTNAME}&key_path=/opt/airflow/repo/secrets/cisa-elt-pipeline.json'
+      AIRFLOW_CONN_GCP_CONN_ID: 'google-cloud-platform://?project_id=${GCLOUD_PROJECTNAME}&key_path=/opt/airflow/repo/secrets/cisa-elt-pipeline.json'
+
+      # App Specific Vars
+      IS_LOCAL: 'false'
+      GCLOUD_PROJECTNAME: ${GCLOUD_PROJECTNAME}
+      GCLOUD_BUCKETNAME: ${GCLOUD_BUCKETNAME}
+      GH_TOKEN: ${GH_TOKEN}
+      MY_EMAIL: ${MY_EMAIL}
+      PYTHONPATH: "/opt/airflow/repo:/opt/airflow/repo/${PYTHONPATH}"
+      GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/repo/secrets/cisa-elt-pipeline.json
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./:/opt/airflow/repo
+    command: bash -c "
+      airflow db migrate && 
+      airflow users create 
+      --username airflow 
+      --password airflow 
+      --firstname Air 
+      --lastname Flow 
+      --role Admin 
+      --email ${MY_EMAIL}
+      || true
+      && airflow webserver"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Service 3: Airflow Scheduler
+  airflow-scheduler:
+    build: .
+    image: cve-airflow:latest
+    depends_on:
+      - postgres
+    working_dir: /opt/airflow/repo
+    environment:
+      # Copy the exact same environment block from webserver here
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/repo/dags
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT: 'google-cloud-platform://?project_id=${GCLOUD_PROJECTNAME}&key_path=/opt/airflow/repo/secrets/cisa-elt-pipeline.json'
+      IS_LOCAL: 'false'
+      GCLOUD_PROJECTNAME: ${GCLOUD_PROJECTNAME}
+      GCLOUD_BUCKETNAME: ${GCLOUD_BUCKETNAME}
+      PYTHONPATH: "/opt/airflow/repo:/opt/airflow/repo/${PYTHONPATH}"
+      GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/repo/secrets/cisa-elt-pipeline.json
+    volumes: 
+      - ./:/opt/airflow/repo
+    command: airflow scheduler
+
+volumes:
+  postgres_data:
