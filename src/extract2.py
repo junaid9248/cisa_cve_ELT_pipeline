@@ -16,6 +16,7 @@ from src.gc import GoogleClient
 
 from src.parser import extract_cvedata
 
+from src.config import GCLOUD_PROJECTNAME, GCLOUD_BUCKETNAME
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 #If not available locally will not execute
@@ -299,6 +300,7 @@ class cveExtractor():
 
                             if self.islocal is False:
                                 output_file.write(json.dumps(result) + '\n')
+
                             else:
                                 extracted_rows.append(result.get('extracted_cve_record'))
                             
@@ -321,7 +323,20 @@ class cveExtractor():
 
         finally:
             if output_file:
-                output_file.close()
+                try:
+                    logging.info(f'Successfully wrote ndjson file for year {year_data['year']}')
+                    output_file.close() 
+                except Exception as e:
+                    logging.warning(f'Something went wrong closing ndjson file for year {year_data['year']}')
+        
+        try:
+            # Upload to the gcs bucket ndjson folder
+            blob_name = f'NDjson_files/{year}/ndjson_{year}_file.ndjson'
+            self.google_client.upload_blob(blobname=blob_name, local_filepath=ndjson_path_for_year)
+
+            os.remove(ndjson_path_for_year) 
+        except Exception as e:
+            logging.warning(f'Something went wrong uploading {blob_name} to {GCLOUD_BUCKETNAME} : {e}')
 
     
     def year_to_csv(self, year_processed_files: List, year):
