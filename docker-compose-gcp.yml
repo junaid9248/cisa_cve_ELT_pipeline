@@ -17,7 +17,9 @@ services:
 
   # Service 2: Airflow Webserver
   airflow-webserver:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile.airflow
     image: cve-airflow:latest
     depends_on:
       - postgres
@@ -65,7 +67,9 @@ services:
 
   # Service 3: Airflow Scheduler
   airflow-scheduler:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile.airflow
     image: cve-airflow:latest
     depends_on:
       - postgres
