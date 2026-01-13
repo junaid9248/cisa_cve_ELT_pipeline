@@ -6,7 +6,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 import sys
 
 def run_dbt_transform_command(dbt_command: str = ''):
-    dbt_command = ['dbt' ,'build' ,'--project-dir' ,'dbt' ,'--project-profile' ,'dbt' ,'--select ','sources']
+    dbt_command = ['dbt' ,'build' ,'--project-dir' ,'/opt/airflow/repo/dbt' ,'--profiles-dir' ,'/opt/airflow/repo/dbt' ,'--select ','sources']
 
     try:
         result = subprocess.run(args=dbt_command,
