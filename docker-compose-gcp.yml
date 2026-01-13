@@ -47,6 +47,7 @@ services:
     volumes:
       - ./:/opt/airflow/repo
     command: bash -c "
+      airflow db migrate &&
       airflow users create 
       --username airflow 
       --password airflow 

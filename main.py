@@ -2,7 +2,7 @@
 from src.fetch_years import fetch_all_years
 from src.extract2 import cveExtractor
 from src.load_raws_bq import ndjson_loader
-from src.transform_dbt import run_dbt_transform_command
+from src.transform_to_final import run_dbt_command
 import argparse
 import os
 import subprocess
@@ -49,7 +49,7 @@ def run_elt_pipeline(args):
     # STEP 2: Initialize the loader class and load ndjsons to a cve_raws table
     if args.task == 'transform':
         logging.info(f'---STARTING TRANSFORM OF RAWS TABLE TO FINAL TABLE---')
-        run_dbt_transform_command()
+        run_dbt_command(dbt_command=['dbt','build','--project-dir','/opt/airflow/repo/dbt','--profiles-dir','/opt/airflow/repo/dbt','--select','sources'])
         
 
 if __name__ == '__main__':

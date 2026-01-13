@@ -5,7 +5,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 import sys
 
-def run_dbt_transform_command(dbt_command: List = []):
+def run_dbt_command(dbt_command: List = []):
     try:
         result = subprocess.run(args=dbt_command,
                                 cwd= 'dbt',
