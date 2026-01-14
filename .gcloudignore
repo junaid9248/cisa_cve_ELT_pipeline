@@ -35,6 +35,7 @@ __pycache__/
 # Enviroment variable files.env
 *.env
 
-*secrets/
+.secrets/
+*.json
 
 *.main_alt.py

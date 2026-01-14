@@ -30,6 +30,3 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
-# test files and such 
-main_alt.py

@@ -10,17 +10,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+COPY cloudentrypoint.sh .
+RUN chmod +x cloudentrypoint.sh
+
 COPY main.py .
 COPY src/ ./src/
-COPY secrets/ ./secrets/
 COPY dbt/ ./dbt/
 
-#Removed cloud entrypoint.sh call will manually update the vm code folder for now and automate cron job later
-#Resolving the bigquery adapter issues by cleaning up target file first and reinitializing all targets
-WORKDIR /app/dbt
-
-RUN dbt deps
-RUN dbt clean 
-RUN dbt compile
-
-WORKDIR /app
+ENTRYPOINT [ "cloudentrypoint.sh" ]
