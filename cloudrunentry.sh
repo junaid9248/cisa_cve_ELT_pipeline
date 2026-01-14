@@ -26,6 +26,17 @@ else
 
     echo "Cloning succesful!"
 fi
+
+#Attempting to resolve partial passing issues
+cd /app/dbt
+
+dbt deps
+dbt clean 
+dbt compile
+
+cd ..
+
 # This will execute whatever command is passed to the container built from the Dockerfile that calls this entrypoint
 # In our case it will be the container-overrides called from the elt_extraction task triggered by dag run 
+echo 'Executing container override commands now...'
 exec "$@"
