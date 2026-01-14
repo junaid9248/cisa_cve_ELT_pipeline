@@ -1,9 +1,11 @@
 #!/bin/bash
-set -e
-
+set -ex
 echo "Running dbt clean up command..."
+ls -la /app
 
 cd /app/dbt
+pwd
+
 dbt deps
 dbt clean 
 dbt compile
