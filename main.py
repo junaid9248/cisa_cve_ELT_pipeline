@@ -49,12 +49,7 @@ def run_elt_pipeline(args):
     # STEP 2: Initialize the loader class and load ndjsons to a cve_raws table
     if args.task == 'transform':
         logging.info(f'---STARTING TRANSFORM OF RAWS TABLE TO FINAL TABLE---')
-        dbt_command = [
-            'dbt', 'build',
-            '--project-dir', './dbt',
-            '--profiles-dir', './dbt',
-            '--select', 'sources'
-        ]
+        dbt_command = f'dbt build --project-dir dbt --profiles-dir dbt --select sources'.split()
         run_dbt_command(dbt_command=dbt_command)
         
 
