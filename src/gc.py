@@ -108,7 +108,20 @@ class GoogleClient():
         except Exception as e:
             logging.warning(f'Failed to upload {year} csv to GCS bucket {self.bucket_name}: {e}')
     
+    # A method to check if the final table exists, crete if it does not
+    def check_final_table_exists(self):
+        final_dataset_id = f'{self.projectID}.dataset_final'
 
+        try:
+            #Create a bigquery dataset object
+            dataset = bigquery.Dataset(final_dataset_id)
+            dataset.location = 'US'
+            dataset = self.bigquery_client.create_dataset(dataset=dataset, exists_ok=True ,timeout=30)
+            logging.info(f'Successfully created or verified existence of dataset_final dataset: {final_dataset_id}')
+        except Exception as e:
+            logging.info(f'Failed to create dataset_final: {e}')
+
+            
     # pass a first run parameter to check if dataset exists or table exists, after which we simply just dont check
     def create_fill_raws_table(self, source_uri: str= '', year: str = '', isFirstRun : bool = True):
         dataset_id = f'{self.projectID}.sources_bronze'
@@ -162,4 +175,8 @@ class GoogleClient():
 
             load_job.result(timeout=3600)
             logging.info(f'Load job succesful for year {year} on {table_ref}')
+
+        #checking or creating the final dataset where DBT will build the table.
+
+        self.check_final_table_exists()
 
