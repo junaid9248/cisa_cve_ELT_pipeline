@@ -33,8 +33,3 @@ Dockerfile.local
 
 cloudrunentry.sh
 
-src/
-cloudsecrets.py
-kaggle_manager.py
-transform_dbt.py
-
