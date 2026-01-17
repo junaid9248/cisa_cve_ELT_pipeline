@@ -46,18 +46,6 @@ The pipeline operates on a GCP Compute Engine VM (e2-medium) with 2 vCPUs, 4GB R
 
 
 
-## __Getting Started__
-### Prerequisites
-Install and configure neccesary services:
-1. Python 3.11 environment
-2. Google Cloud Platform account with enabled services (GCS, BigQuery, Compute Engine)
-3. GCP service account credentials with appropriate IAM permissions
-4. Docker and Docker Compose
-5. Pip package manager
-
-### Installation Steps
-
-
 
 
 
