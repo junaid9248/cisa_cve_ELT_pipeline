@@ -25,10 +25,17 @@ Thumbs.db
 .git/
 .gitignore
 
+
 # Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-cloudsecrets.py
+# Enviroment variable files.env
+*.env
+
+.secrets/
+*.json
+
+*.main_alt.py

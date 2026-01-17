@@ -1,27 +1,32 @@
 import requests
+from requests.adapters import HTTPAdapter
 import json
 import csv
 import os
 import time
-import logging
+
 from datetime import datetime
 import io
 from typing import Dict, List, Optional
-from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
-
-#from src.config import GH_TOKEN
+from urllib3.util.retry import Retry
+from src.config import IS_LOCAL
 
 from src.gc import GoogleClient
 
 from src.parser import extract_cvedata
 
-logging.basicConfig(level=logging.INFO)
+from src.config import GCLOUD_PROJECTNAME, GCLOUD_BUCKETNAME
+import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 #If not available locally will not execute
+from dotenv import load_dotenv
 load_dotenv(override=True)
              
 class cveExtractor():
-    def __init__(self, islocal: Optional[bool] = True, branch: str = 'develop', token: Optional[str] = None):
+    def __init__(self, islocal: bool = IS_LOCAL, branch: str = 'develop', token: Optional[str] = None):
+        
+        self.islocal= islocal
 
         self.branch = branch
         self.base_url = "https://api.github.com"
@@ -33,10 +38,24 @@ class cveExtractor():
             'User-Agent': 'CISA-Vulnrichment-Extractor/1.0',
             'Accept': 'application/vnd.github.v3+json'
         }
+        self.max_workers = 25
+
+        retry_strategy = Retry(
+            total=5,
+            status_forcelist=[429, 500, 502, 503, 504],
+            backoff_factor=1
+        )
+
+        adapter = HTTPAdapter(
+            max_retries= retry_strategy,
+            pool_connections = self.max_workers,
+            pool_maxsize= self.max_workers * 2
+        )
 
         #Establish a new session
         self.session = requests.Session()
-        self.session.headers.update(self.headers)
+        self.session.mount("https://", adapter)
+        #self.session.headers.update(self.headers)
 
         
         GH_TOKEN = os.environ.get('GH_TOKEN')
@@ -46,20 +65,18 @@ class cveExtractor():
         if self.token:
             # Add token to self.headers then update the header to current sessoion by usung update method
             self.session.headers.update({
-                'User-Agent': 'CISA-Vulnrichment-Extractor/1.0',
-                'Accept': 'application/vnd.github.v3+json',
                 'Authorization': f'token {self.token}'})
             logging.info('GitHub token for authentication was found and used to establish session')
         else:
             logging.warning(" No GitHub token found")
 
-        self.islocal = islocal
 
-        #Instantiating a gc class if remote execution
+        #Instantiating a gc class if cloud mode
         if self.islocal == False:
-            self.google_client = GoogleClient()
+            self.google_client = GoogleClient(isLocal=self.islocal)
             logging.info(f'Instantiated a google client for remote upload')
         else:
+            logging.info(f'Local mode so no google client instance is created')
             self.google_client = None     
 
     def _handle_rate_limit(self, response):
@@ -82,7 +99,7 @@ class cveExtractor():
             logging.error(f'Error establishing connection with {self.repo_name} repository: {e}')
 
         if response.status_code == 200:
-            logging.info(f'Successfully estabished connection with {self.repo_name} repository')
+            logging.info(f'Successfully estabished connection with {self.repo_name} repository during test phase!')
             # Check rate limits
             rate_limit_remaining = response.headers.get('x-ratelimit-remaining')
             rate_limit_reset = response.headers.get('x-ratelimit-reset')
@@ -97,26 +114,6 @@ class cveExtractor():
         else:
             logging.error(f"Failed to get file : {response.status_code}")
             return False
-        
-    def get_years(self) -> List[str]:
-        url = f"{self.base_url}/repos/{self.repo_owner}/{self.repo_name}/contents"
-        try:
-            response = self.session.get(url)
-            if response.status_code == 200:
-                data = response.json()
-                years = []
-
-                for item in data:
-                    if item['type'] == 'dir' and item['name'] not in ['.github', 'assets']:
-                        years.append(item['name'])
-                logging.info(f"Number of available years: {len(years)}")
-                return years
-            else:
-                logging.error(f"Error fetching years: {response.status_code}")
-                return []
-        except requests.RequestException as e:
-            logging.error(f"Error fetching years: {e}")
-            return []
 
     # Method to get all INFORMATION on CVE file entries for each year directory 
     # year_data = {'year' : '1999', subdirs:{'1xxx' : [{'name: 'CVE-01-01-199', 'download_url': url},], '2xxx': [{},{}]}}
@@ -249,90 +246,77 @@ class cveExtractor():
         except Exception as e:
             logging.error(f'Failed to fetch file {file_name} from {file_download_url}: {e}')
         
+    def files_generator(self, year_data: Dict):
+            for subdir_files in year_data['subdirs'].values():
+                for file in subdir_files:
+                    yield file
 
-    def extract_store_cve_data(self, year_data: Dict = {}, maxworkers: int = 50):
+    def extract_store_cve_data(self, year_data: Dict = {}, maxworkers: int = 25):
         year = year_data['year']
-        total_files = 0
-        for subdir_files in year_data['subdirs'].values():
-            total_files = total_files + len(subdir_files)
         
-        logging.info(f'Starting processing for {total_files} in {year}')
-
-        all_files = []
-
-        for (_, files) in year_data['subdirs'].items():
-            all_files.extend(files)
-
+        
+        total_files_in_year = sum(len(f) for f in year_data['subdirs'].values())
+        logging.info(f'Starting processing for {total_files_in_year} in {year}')
 
         ndjson_path_for_year = f'/tmp/bronze_cve_{year}.ndjson'
-
         if os.path.exists(ndjson_path_for_year):
             os.remove(ndjson_path_for_year)
 
-
-        # parameters for the threadpoolexecuter
-        maxworkers = 25
+        maxworkers = self.max_workers
         amp_factor = 5
         max_in_memory = maxworkers * amp_factor
 
+        files_iter = self.files_generator(year_data=year_data)
+
+        output_file = None
         if self.islocal is False:
-            # Open the file from the temp folder if we are in cloud mode
-            output_file = open(file= ndjson_path_for_year, mode='w',encoding='UTF-8')
+            output_file = open(file=ndjson_path_for_year, mode='w', encoding='UTF-8')
         else:
             extracted_rows = []
 
         try:
             with ThreadPoolExecutor(max_workers=maxworkers) as executor:
-                #Create a set to store pending files
                 pending = set()
+                names_pending_by_future = {}
 
-                names_pending_by_future ={}
-
-                #Create an iterable object from the all_files list
-                files_iter = iter(all_files)
-
-                while len(pending) < max_in_memory:
-                    # While we are not above the max in memory
+                # Initial fill of the 'pending' bucket
+                for _ in range(max_in_memory):
                     try:
                         current_file = next(files_iter)
+                        future = executor.submit(self.extract_single_cve_file, current_file, year)
+                        pending.add(future)
+                        names_pending_by_future[future] = current_file['name']
                     except StopIteration:
                         break
 
-                    future = executor.submit(self.extract_single_cve_file, current_file, year)
-                    pending.add(future)
-                    names_pending_by_future[future] = current_file['name']
-
                 while pending:
-                    try:
-                        done, pending = wait(fs=pending, timeout= 30, return_when=FIRST_COMPLETED)
-                        
+                    
+                    done, pending = wait(fs=pending, timeout=30, return_when=FIRST_COMPLETED)
+                    try:  
                         for future in done:
                             result = future.result()
+                            fname = names_pending_by_future.pop(future, "Unknown")
+                            
                             if result is None:
                                 continue
 
                             if self.islocal is False:
-                                # Converts python dict to json string
-                                ndjson_for_cve_row= json.dumps(result)
-                                output_file.write(ndjson_for_cve_row + '\n')
+                                output_file.write(json.dumps(result) + '\n')
                             else:
-                                extracted_data = result.get('extracted_cve_record')
-                                extracted_rows.append(extracted_data)
-
+                                extracted_rows.append(result.get('extracted_cve_record'))
+                            
+                            del result 
                     except Exception as e:
-                        if self.islocal is False:
-                            logging.error(f'Failed to write row for {names_pending_by_future.get(future)} to {ndjson_path_for_year}:{e}')
-                        else:
-                            logging.error(f'Failed to append row for {names_pending_by_future.get(future)} to extracted_rows:{e}')
-
-                    finally:
-                        names_pending_by_future.pop(future, None)
-
-                    # Getting the next file from pending
+                        logging.error(f'Error processing {fname} in {year}: {e}')
+                        continue  
+                    
+                    # After the result of that future has been proccessed
+                    # ie: 1. Got a valid result and either written to ndjson file or added to extracted rows to write locally alter
+                    # 2. Skipped as a error
+                    # We add the next future to pending untill it keeps 
                     try:
                         next_file = next(files_iter)
-                        next_future = executor.submit(self.extract_single_cve_file, file = next_file, year=year)
-
+                        next_future = executor.submit(self.extract_single_cve_file, next_file, year)
                         pending.add(next_future)
                         names_pending_by_future[next_future] = next_file['name']
                     except StopIteration:
@@ -340,21 +324,24 @@ class cveExtractor():
 
         finally:
             if output_file:
-                output_file.close()
 
-
+                try:
+                    output_file.close()
+                    logging.info(f'Successfully wrote ndjson file for year {year}')
+    
+                except Exception as e:
+                    logging.warning(f'Something went wrong closing the file {ndjson_path_for_year}: {e}')
+        
         if self.islocal is False:
             try:
-                gcs_ndjson_blob_name =f'NDjson_files/{year}/ndjson_{year}_file.ndjson'
-                self.google_client.upload_blob(blobname=gcs_ndjson_blob_name, local_filepath=ndjson_path_for_year)
+                # Upload to the gcs bucket ndjson folder and then delete temp file
+                blob_name = f'NDjson_files/{year}/ndjson_{year}_file.ndjson'
+                self.google_client.upload_blob(blobname=blob_name, local_filepath=ndjson_path_for_year)
 
+                os.remove(ndjson_path_for_year) 
             except Exception as e:
-                logging.warning(f'Something went wrong uploading to GCS bucket ndjson file from {ndjson_path_for_year}:{e}')
+                    logging.warning(f'Something went wrong uploading {blob_name} to {GCLOUD_BUCKETNAME} : {e}')
 
-        else:
-            self.year_to_csv(year_processed_files=extracted_rows)
-
-    
     def year_to_csv(self, year_processed_files: List, year):
         try:
             local_dataset_folder_path = os.path.join(os.getcwd(), 'dataset_local')
@@ -426,8 +413,8 @@ class cveExtractor():
                 # Since for both local and cloud mode we still get the years
                 # years will be either all the available years (get_years())
                 # or can be the custom list of years for testing
-                year_data = self.get_cve_files_for_year(year)
-                self.extract_store_cve_data(year_data)
+                year_data_file = self.get_cve_files_for_year(year)
+                self.extract_store_cve_data(year_data= year_data_file)
 
 
 

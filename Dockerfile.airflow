@@ -1,0 +1,23 @@
+#This is for image configuration of airflow containers in compute vm
+FROM apache/airflow:2.9.3-python3.11
+
+# Copying only what the airflow docker container needs to operate and not entire project directory
+# We need the config.py to set env variables from local .env
+# We need the dags folder to run dags
+# We need the requirements txt file for the airflow configuration only
+# Note: we change ownership of copied folder and file to airflow from root as airflwo containers are configured to airflow user
+COPY --chown=airflow:root dags/ /opt/airflow/repo/dags/
+COPY --chown=airflow:root src/config.py /opt/airflow/repo/src/config.py
+# create secrets folder with the json credentials for set service account and copy into airflow secrets folder 
+COPY --chown=airflow:root secrets/cisa-elt-pipeline.json /opt/airflow/repo/secrets/cisa-elt-pipeline.json
+
+COPY --chown=airflow:root dbt/ /opt/airflow/repo/dbt/
+COPY --chown=airflow:root airflow-requirements.txt /opt/airflow/repo/airflow-requirements.txt
+
+# In airflow the repo will be our working directory 
+WORKDIR /opt/airflow/repo
+
+# Get updates for all libs and download from requirements
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r airflow-requirements.txt
+

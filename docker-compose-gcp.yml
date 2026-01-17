@@ -1,7 +1,6 @@
-# docker-compose.yml
 
 services:
-  #Service 1: PostgreSQL Database
+  # Service 1: PostgreSQL Database
   postgres:
     image: postgres:13
     environment:
@@ -16,10 +15,11 @@ services:
       timeout: 5s
       retries: 5
 
-  #Service 2: Airflow Webserver
+  # Service 2: Airflow Webserver
   airflow-webserver:
-    build: .
-    
+    build: 
+      context: .
+      dockerfile: Dockerfile.airflow
     image: cve-airflow:latest
     depends_on:
       - postgres
@@ -29,72 +29,62 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
-      # For later version of Airflow, default auth manager is SimpleAuthManager so we change it to FabAuthManager
       AIRFLOW__CORE__AUTH_MANAGER: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
       AIRFLOW__CORE__HOSTNAME_CALLABLE: "airflow.utils.net.get_host_ip_address"
-
-      # Env vars passed hard passed thru the docker-compose 
-      IS_LOCAL: 'false'
-      GCLOUD_PROJECTNAME: "cisa-cve-data-pipeline"
-      GOOGLE_APPLICATION_CREDENTIALS: 'secrets/cisa-cve-data-pipeline-a26a62e94ef3.json'
-      PYTHONPATH: /opt/airflow/repo
-
-      #Env vars sourced from .env file
-      GH_TOKEN: ${GH_TOKEN}
-      GCLOUD_BUCKETNAME: ${GCLOUD_BUCKETNAME}
-      MY_EMAIL: ${MY_EMAIL}
       AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY}
+
+      # GCP Connections both
+      AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT: 'google-cloud-platform://?project_id=${GCLOUD_PROJECTNAME}&key_path=/opt/airflow/repo/secrets/cisa-elt-pipeline.json'
+      AIRFLOW_CONN_GCP_CONN_ID: 'google-cloud-platform://?project_id=${GCLOUD_PROJECTNAME}&key_path=/opt/airflow/repo/secrets/cisa-elt-pipeline.json'
+
+      IS_LOCAL: 'false'
+      GCLOUD_PROJECTNAME: ${GCLOUD_PROJECTNAME}
+      GCLOUD_BUCKETNAME: ${GCLOUD_BUCKETNAME}
+      GH_TOKEN: ${GH_TOKEN}
+      MY_EMAIL: ${MY_EMAIL}
+      PYTHONPATH: /opt/airflow/repo/src
+      GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/repo/secrets/cisa-elt-pipeline.json
     ports:
       - "8080:8080"
     volumes:
       - ./:/opt/airflow/repo
     command: bash -c "
-                      airflow db migrate && 
-                      airflow users create 
-                      --username airflow 
-                      --password airflow 
-                      --firstname Air 
-                      --lastname Flow 
-                      --role Admin 
-                      --email ${MY_EMAIL}
-                      || true
-                      && airflow webserver"
+      airflow db migrate &&
+      airflow users create 
+      --username airflow 
+      --password airflow 
+      --firstname Air 
+      --lastname Flow 
+      --role Admin 
+      --email ${MY_EMAIL}
+      || true
+      && airflow webserver"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 5
 
-
-  #Service 3: Airflow Scheduler
+  # Service 3: Airflow Scheduler
   airflow-scheduler:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile.airflow
     image: cve-airflow:latest
     depends_on:
       - postgres
-    
     working_dir: /opt/airflow/repo
-
     environment:
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/repo/dags
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__CORE__AUTH_MANAGER: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
-      AIRFLOW__CORE__HOSTNAME_CALLABLE: "airflow.utils.net.get_host_ip_address"
-
-      # Env vars passed hard passed thru the docker-compose 
+      AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT: 'google-cloud-platform://?project_id=${GCLOUD_PROJECTNAME}&key_path=/opt/airflow/repo/secrets/cisa-elt-pipeline.json'
       IS_LOCAL: 'false'
-      GCLOUD_PROJECTNAME: "cisa-cve-data-pipeline"
-      GOOGLE_APPLICATION_CREDENTIALS: 'secrets/cisa-cve-data-pipeline-a26a62e94ef3.json'
-      PYTHONPATH: /opt/airflow/repo  
-
-      #Env vars sourced from .env file
-      GH_TOKEN: ${GH_TOKEN}
+      GCLOUD_PROJECTNAME: ${GCLOUD_PROJECTNAME}
       GCLOUD_BUCKETNAME: ${GCLOUD_BUCKETNAME}
-      MY_EMAIL: ${MY_EMAIL}
-      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY}
-
+      PYTHONPATH: /opt/airflow/repo
+      GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/repo/secrets/cisa-elt-pipeline.json
     volumes: 
       - ./:/opt/airflow/repo
     command: airflow scheduler

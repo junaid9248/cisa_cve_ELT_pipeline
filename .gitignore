@@ -24,3 +24,22 @@ __pycache__/
 *.env
 
 *secrets/
+*logs/
+
+dags/cisa-cve-pipeline_dag.py
+docker-compose.yml
+Dockerfile
+Dockerfile.local
+
+kaggle_manager.py
+
+
+src/*
+    !src/__init__.py
+    !src/config.py
+    !src/extract2.py
+    !src/fetch_years.py
+    !src/gc.py
+    !src/load_raws_bq.py
+    !src/parser.py
+    !src/transform_to_final.py
