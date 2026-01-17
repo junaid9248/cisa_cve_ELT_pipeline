@@ -1,7 +1,7 @@
 # __CISA CVE Vulnrichment ELT Data pipeline__
 
 ## __Overview__
-This project implements a high-performance ELT (Extract, Load, Transform) pipeline designed to process and analyze 120,000+ Common Vulnerabilities and Exposures (CVE) records data enriched by CISA's Authorized Data Publisher (ADP) Vulnrichment program (https://github.com/cisagov/vulnrichment/). 
+This project implements a production-grade ELT (Extract, Load, Transform) pipeline using Apache Airflow to process Common Vulnerabilities and Exposures (CVE) data enriched by CISA's Authorized Data Publisher (ADP) Vulnrichment program (https://github.com/cisagov/vulnrichment/). 
 
 The pipeline automates the journey from raw, nested JSON vulnerability records to a structured, query-ready Data Warehouse, enabling security researchers to perform complex risk analysis at scale.
 
