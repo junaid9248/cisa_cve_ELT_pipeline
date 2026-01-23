@@ -135,7 +135,6 @@ class cveExtractor():
                 year_response_data = response.json()
                 logging.info(f" Found {len(year_response_data)} subdirectories in {year} year directory")
                 
-                # Show what we actually got
                 for item in year_response_data:
                     logging.info(f"   - {item['name']}")
 
@@ -389,11 +388,12 @@ class cveExtractor():
                 response = self.session.get(download_url)
 
             if response.status_code == 200:
-                logging.info(f"Successfully downloaded {file_name}")
                 cve_data = response.json()
 
-                extracted_data = self.extract_cve_data(cve_data)
-                
+                extracted_data = extract_cvedata(cve_data)
+                if extracted_data:
+                    logging.info(f"Successfully downloaded {file_name}")
+                    
                 return extracted_data
 
         except json.JSONDecodeError as e:
@@ -401,18 +401,25 @@ class cveExtractor():
 
 
     # Psuedo main function called from main.py
-    def run(self, years: List[str] = []):
+    def run(self, years: List[str] = [], cve_debug_id: Optional[str] = ''):
 
         success = self.test_connection()
 
         # If succesful test connection is established
         if success:
-            for year in years:
-                # Since for both local and cloud mode we still get the years
-                # years will be either all the available years (get_years())
-                # or can be the custom list of years for testing
+            if cve_debug_id:
+                year = cve_debug_id.split('-')[1]
                 year_data_file = self.get_cve_files_for_year(year)
-                self.extract_store_cve_data(year_data= year_data_file)
+                extracted_data = self.extract_data_for_cve_record(year_data = year_data_file, file_name = cve_debug_id)
+                print(extracted_data)
+
+            if years: 
+                for year in years:
+                    # Since for both local and cloud mode we still get the years
+                    # years will be either all the available years (get_years())
+                    # or can be the custom list of years for testing
+                    year_data_file = self.get_cve_files_for_year(year)
+                    self.extract_store_cve_data(year_data= year_data_file)
 
 
 
