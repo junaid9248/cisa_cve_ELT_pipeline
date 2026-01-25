@@ -362,11 +362,11 @@ class cveExtractor():
                 
                 if file.get('cvss_version') == 4.0:
                     if isinstance(file.get('confidentiality_impact'), list):
-                        file['confidentiality_impact'] = ','.join(file['confidentiality_impact'])
+                        file['confidentiality_impact'] = str(file['confidentiality_impact'])
                     if isinstance(file.get('integrity_impact'), list):
-                        file['integrity_impact'] = ','.join(file['integrity_impact'])
+                        file['integrity_impact'] = str(file['integrity_impact'])
                     if isinstance(file.get('availability_impact'), list):
-                        file['availability_impact'] = ','.join(file['availability_impact'])
+                        file['availability_impact'] = str(file['availability_impact'])
                 
             with open(csv_file_path, mode ='w', newline='', encoding='UTF-8') as csvfile:
 
